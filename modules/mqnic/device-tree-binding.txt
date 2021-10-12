@@ -1,0 +1,37 @@
+* Corundum mqnic Ethernet controller
+
+Required properties:
+- compatible: Should be "corundum,mqnic"
+- reg: Address and length of the "control" register set. Optionally a second and
+	third range, the "app" and "ram" register sets may be added.
+- interrupts: Should contain mqnic interrupt(s)
+
+Optional properties:
+- mac-addr-eeprom: Phandle to an EEPROM node to read a MAC address from
+- mac-addr-offset: At which (byte) offset to expect the MAC address
+	(default: 0x0)
+- mac-addr-add: Number to add to the 6th MAC address byte (default: 0x0)
+- mac-addr-local: Boolean, mark derived MAC addresses as "locally administrated"
+- module-eeproms: Array of phandles to SFP module EEPROM node(s)
+
+Examples:
+
+	mqnic0: ethernet@a0000000 {
+		compatible = "corundum,mqnic";
+		reg = <0x0 0xa0000000 0x0 0x1000000>,
+		      <0x0 0xb0000000 0x0 0x1000000>;
+		reg-names = "csr", "app";
+		interrupt-parent = <&gic>;
+		interrupts = <0x0 0x59 0x1>, <0x0 0x5a 0x1>, <0x0 0x5b 0x1>,
+			     <0x0 0x5c 0x1>, <0x0 0x5d 0x1>, <0x0 0x5e 0x1>,
+			     <0x0 0x5f 0x1>, <0x0 0x60 0x1>, <0x0 0x68 0x1>,
+			     <0x0 0x69 0x1>, <0x0 0x6a 0x1>, <0x0 0x6b 0x1>,
+			     <0x0 0x6c 0x1>, <0x0 0x6d 0x1>, <0x0 0x6e 0x1>,
+			     <0x0 0x6f 0x1>;
+
+		mac-addr-eeprom = <&eeprom>;
+		mac-addr-offset = <0x20>;
+		mac-addr-add = <0x1>;
+		mac-addr-local;
+		module-eeproms = <&module_eeprom_sfp0>, <&module_eeprom_sfp1>;
+	};

@@ -37,7 +37,10 @@
 #define MQNIC_H
 
 #include <linux/kernel.h>
+#ifdef CONFIG_PCI
 #include <linux/pci.h>
+#endif
+#include <linux/platform_device.h>
 #include <linux/miscdevice.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -105,6 +108,7 @@ struct mqnic_dev {
 
 	int irq_count;
 	int irq_map[32];
+	char irq_name[32][16 + 3];
 
 	unsigned int id;
 	struct list_head dev_list_node;

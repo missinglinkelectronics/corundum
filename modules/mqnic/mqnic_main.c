@@ -53,6 +53,7 @@ module_param_named(num_queue_entries, mqnic_num_queue_entries,
 		   uint, 0644);
 MODULE_PARM_DESC(num_queue_entries, "number of queue entries to allocate per queue (default: 1024)");
 
+#ifdef CONFIG_PCI
 static const struct pci_device_id mqnic_pci_id_table[] = {
 	{PCI_DEVICE(0x1234, 0x1001)},
 	{PCI_DEVICE(0x5543, 0x1001)},
@@ -60,6 +61,15 @@ static const struct pci_device_id mqnic_pci_id_table[] = {
 };
 
 MODULE_DEVICE_TABLE(pci, mqnic_pci_id_table);
+#endif
+
+#ifdef CONFIG_OF
+static struct of_device_id mqnic_of_id_table[] = {
+	{ .compatible = "corundum,mqnic" },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, mqnic_of_id_table);
+#endif
 
 static LIST_HEAD(mqnic_devices);
 static DEFINE_SPINLOCK(mqnic_devices_lock);
@@ -114,11 +124,174 @@ static irqreturn_t mqnic_interrupt(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static struct mqnic_dev *mqnic_dev_alloc(struct device *dev)
+{
+	struct mqnic_dev *mqnic;
+
+	mqnic = devm_kzalloc(dev, sizeof(*mqnic), GFP_KERNEL);
+	if (!mqnic)
+		return NULL;
+
+	mqnic->dev = dev;
+
+	// assign ID and add to list
+	spin_lock(&mqnic_devices_lock);
+	mqnic->id = mqnic_get_free_id();
+	list_add_tail(&mqnic->dev_list_node, &mqnic_devices);
+	spin_unlock(&mqnic_devices_lock);
+
+	snprintf(mqnic->name, sizeof(mqnic->name), DRIVER_NAME "%d", mqnic->id);
+
+	return mqnic;
+}
+
+static void mqnic_dev_free(struct mqnic_dev *mqnic)
+{
+	spin_lock(&mqnic_devices_lock);
+	list_del(&mqnic->dev_list_node);
+	spin_unlock(&mqnic_devices_lock);
+}
+
+static int mqnic_dev_setdma(struct mqnic_dev *mqnic)
+{
+	int ret;
+	struct device *dev = mqnic->dev;
+
+	// Set mask
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
+	if (ret) {
+		dev_warn(dev, "Warning: failed to set 64 bit PCI DMA mask");
+		ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
+		if (ret) {
+			dev_err(dev, "Failed to set PCI DMA mask");
+			return ret;
+		}
+	}
+
+	// Set max segment size
+	dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
+
+	return ret;
+}
+
+static int mqnic_dev_readid(struct mqnic_dev *mqnic)
+{
+	struct device *dev = mqnic->dev;
+
+	// Read ID registers
+	mqnic->fw_id = ioread32(mqnic->hw_addr + MQNIC_REG_FW_ID);
+	dev_info(dev, "FW ID: 0x%08x", mqnic->fw_id);
+	mqnic->fw_ver = ioread32(mqnic->hw_addr + MQNIC_REG_FW_VER);
+	dev_info(dev, "FW version: %d.%d",
+			mqnic->fw_ver >> 16, mqnic->fw_ver & 0xffff);
+	mqnic->board_id = ioread32(mqnic->hw_addr + MQNIC_REG_BOARD_ID);
+	dev_info(dev, "Board ID: 0x%08x", mqnic->board_id);
+	mqnic->board_ver = ioread32(mqnic->hw_addr + MQNIC_REG_BOARD_VER);
+	dev_info(dev, "Board version: %d.%d",
+			mqnic->board_ver >> 16, mqnic->board_ver & 0xffff);
+
+	mqnic->phc_count = ioread32(mqnic->hw_addr + MQNIC_REG_PHC_COUNT);
+	dev_info(dev, "PHC count: %d", mqnic->phc_count);
+	mqnic->phc_offset = ioread32(mqnic->hw_addr + MQNIC_REG_PHC_OFFSET);
+	dev_info(dev, "PHC offset: 0x%08x", mqnic->phc_offset);
+
+	if (mqnic->phc_count)
+		mqnic->phc_hw_addr = mqnic->hw_addr + mqnic->phc_offset;
+
+	mqnic->if_count = ioread32(mqnic->hw_addr + MQNIC_REG_IF_COUNT);
+	dev_info(dev, "IF count: %d", mqnic->if_count);
+	mqnic->if_stride = ioread32(mqnic->hw_addr + MQNIC_REG_IF_STRIDE);
+	dev_info(dev, "IF stride: 0x%08x", mqnic->if_stride);
+	mqnic->if_csr_offset = ioread32(mqnic->hw_addr + MQNIC_REG_IF_CSR_OFFSET);
+	dev_info(dev, "IF CSR offset: 0x%08x", mqnic->if_csr_offset);
+
+	// check BAR size
+	if (mqnic->if_count * mqnic->if_stride > mqnic->hw_regs_size) {
+		dev_err(dev, "Invalid BAR configuration (%d IF * 0x%x > 0x%llx)",
+				mqnic->if_count, mqnic->if_stride,
+				mqnic->hw_regs_size);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int mqnic_dev_register(struct mqnic_dev *mqnic)
+{
+	int ret;
+	struct device *dev = mqnic->dev;
+	int k;
+
+	// register PHC
+	if (mqnic->phc_count)
+		mqnic_register_phc(mqnic);
+
+	mutex_init(&mqnic->state_lock);
+
+	// Set up interfaces
+	if (mqnic->if_count > MQNIC_MAX_IF)
+		mqnic->if_count = MQNIC_MAX_IF;
+
+	for (k = 0; k < mqnic->if_count; k++) {
+		dev_info(dev, "Creating interface %d", k);
+		ret = mqnic_init_netdev(mqnic, k,
+				mqnic->hw_addr + k * mqnic->if_stride);
+		if (ret) {
+			dev_err(dev, "Failed to create net_device");
+			goto fail_init_netdev;
+		}
+	}
+
+	// pass module I2C clients to net_device instances
+	for (k = 0; k < mqnic->if_count; k++) {
+		struct mqnic_priv *priv = netdev_priv(mqnic->ndev[k]);
+		priv->mod_i2c_client = mqnic->mod_i2c_client[k];
+	}
+
+	mqnic->misc_dev.minor = MISC_DYNAMIC_MINOR;
+	mqnic->misc_dev.name = mqnic->name;
+	mqnic->misc_dev.fops = &mqnic_fops;
+	mqnic->misc_dev.parent = dev;
+
+	ret = misc_register(&mqnic->misc_dev);
+	if (ret) {
+		dev_err(dev, "misc_register failed: %d\n", ret);
+		goto fail_miscdev;
+	}
+
+	dev_info(dev, "Registered device %s", mqnic->name);
+
+	return 0;
+
+fail_miscdev:
+fail_init_netdev:
+	for (k = 0; k < ARRAY_SIZE(mqnic->ndev); k++)
+		if (mqnic->ndev[k])
+			mqnic_destroy_netdev(mqnic->ndev[k]);
+	mqnic_unregister_phc(mqnic);
+	return ret;
+}
+
+static void mqnic_dev_unregister(struct mqnic_dev *mqnic)
+{
+	int k;
+
+	misc_deregister(&mqnic->misc_dev);
+
+	for (k = 0; k < ARRAY_SIZE(mqnic->ndev); k++)
+		if (mqnic->ndev[k])
+			mqnic_destroy_netdev(mqnic->ndev[k]);
+
+	mqnic_unregister_phc(mqnic);
+
+	mqnic_board_deinit(mqnic);
+}
+
+#ifdef CONFIG_PCI
 static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	int ret = 0;
 	struct mqnic_dev *mqnic;
-	struct mqnic_priv *priv;
 	struct device *dev = &pdev->dev;
 
 	int k = 0;
@@ -164,20 +337,11 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 	pcie_print_link_status(pdev);
 #endif
 
-	mqnic = devm_kzalloc(dev, sizeof(*mqnic), GFP_KERNEL);
+	mqnic = mqnic_dev_alloc(dev);
 	if (!mqnic)
 		return -ENOMEM;
 
-	mqnic->dev = dev;
 	pci_set_drvdata(pdev, mqnic);
-
-	// assign ID and add to list
-	spin_lock(&mqnic_devices_lock);
-	mqnic->id = mqnic_get_free_id();
-	list_add_tail(&mqnic->dev_list_node, &mqnic_devices);
-	spin_unlock(&mqnic_devices_lock);
-
-	snprintf(mqnic->name, sizeof(mqnic->name), DRIVER_NAME "%d", mqnic->id);
 
 	// Disable ASPM
 	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S |
@@ -190,19 +354,10 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 		goto fail_enable_device;
 	}
 
-	// Set mask
-	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
-	if (ret) {
-		dev_warn(dev, "Warning: failed to set 64 bit PCI DMA mask");
-		ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
-		if (ret) {
-			dev_err(dev, "Failed to set PCI DMA mask");
-			goto fail_regions;
-		}
-	}
-
-	// Set max segment size
-	dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
+	// Set DMA properties
+	ret = mqnic_dev_setdma(mqnic);
+	if (ret)
+		goto fail_regions;
 
 	// Reserve regions
 	ret = pci_request_regions(pdev, DRIVER_NAME);
@@ -255,37 +410,9 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 	}
 
 	// Read ID registers
-	mqnic->fw_id = ioread32(mqnic->hw_addr + MQNIC_REG_FW_ID);
-	dev_info(dev, "FW ID: 0x%08x", mqnic->fw_id);
-	mqnic->fw_ver = ioread32(mqnic->hw_addr + MQNIC_REG_FW_VER);
-	dev_info(dev, "FW version: %d.%d", mqnic->fw_ver >> 16, mqnic->fw_ver & 0xffff);
-	mqnic->board_id = ioread32(mqnic->hw_addr + MQNIC_REG_BOARD_ID);
-	dev_info(dev, "Board ID: 0x%08x", mqnic->board_id);
-	mqnic->board_ver = ioread32(mqnic->hw_addr + MQNIC_REG_BOARD_VER);
-	dev_info(dev, "Board version: %d.%d", mqnic->board_ver >> 16, mqnic->board_ver & 0xffff);
-
-	mqnic->phc_count = ioread32(mqnic->hw_addr + MQNIC_REG_PHC_COUNT);
-	dev_info(dev, "PHC count: %d", mqnic->phc_count);
-	mqnic->phc_offset = ioread32(mqnic->hw_addr + MQNIC_REG_PHC_OFFSET);
-	dev_info(dev, "PHC offset: 0x%08x", mqnic->phc_offset);
-
-	if (mqnic->phc_count)
-		mqnic->phc_hw_addr = mqnic->hw_addr + mqnic->phc_offset;
-
-	mqnic->if_count = ioread32(mqnic->hw_addr + MQNIC_REG_IF_COUNT);
-	dev_info(dev, "IF count: %d", mqnic->if_count);
-	mqnic->if_stride = ioread32(mqnic->hw_addr + MQNIC_REG_IF_STRIDE);
-	dev_info(dev, "IF stride: 0x%08x", mqnic->if_stride);
-	mqnic->if_csr_offset = ioread32(mqnic->hw_addr + MQNIC_REG_IF_CSR_OFFSET);
-	dev_info(dev, "IF CSR offset: 0x%08x", mqnic->if_csr_offset);
-
-	// check BAR size
-	if (mqnic->if_count * mqnic->if_stride > mqnic->hw_regs_size) {
-		ret = -EIO;
-		dev_err(dev, "Invalid BAR configuration (%d IF * 0x%x > 0x%llx)",
-				mqnic->if_count, mqnic->if_stride, mqnic->hw_regs_size);
+	ret = mqnic_dev_readid(mqnic);
+	if (ret)
 		goto fail_map_bars;
-	}
 
 	// Allocate MSI IRQs
 	mqnic->irq_count = pci_alloc_irq_vectors(pdev, 1, 32, PCI_IRQ_MSI);
@@ -318,43 +445,10 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 	// Enable bus mastering for DMA
 	pci_set_master(pdev);
 
-	// register PHC
-	if (mqnic->phc_count)
-		mqnic_register_phc(mqnic);
-
-	mutex_init(&mqnic->state_lock);
-
-	// Set up interfaces
-	if (mqnic->if_count > MQNIC_MAX_IF)
-		mqnic->if_count = MQNIC_MAX_IF;
-
-	for (k = 0; k < mqnic->if_count; k++) {
-		dev_info(dev, "Creating interface %d", k);
-		ret = mqnic_init_netdev(mqnic, k, mqnic->hw_addr + k * mqnic->if_stride);
-		if (ret) {
-			dev_err(dev, "Failed to create net_device");
-			goto fail_init_netdev;
-		}
-	}
-
-	// pass module I2C clients to net_device instances
-	for (k = 0; k < mqnic->if_count; k++) {
-		priv = netdev_priv(mqnic->ndev[k]);
-		priv->mod_i2c_client = mqnic->mod_i2c_client[k];
-	}
-
-	mqnic->misc_dev.minor = MISC_DYNAMIC_MINOR;
-	mqnic->misc_dev.name = mqnic->name;
-	mqnic->misc_dev.fops = &mqnic_fops;
-	mqnic->misc_dev.parent = dev;
-
-	ret = misc_register(&mqnic->misc_dev);
-	if (ret) {
-		dev_err(dev, "misc_register failed: %d\n", ret);
-		goto fail_miscdev;
-	}
-
-	dev_info(dev, "Registered device %s", mqnic->name);
+	// Register devices
+	ret = mqnic_dev_register(mqnic);
+	if (ret)
+		goto fail_register;
 
 	pci_save_state(pdev);
 
@@ -362,12 +456,7 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 	return 0;
 
 	// error handling
-fail_miscdev:
-fail_init_netdev:
-	for (k = 0; k < ARRAY_SIZE(mqnic->ndev); k++)
-		if (mqnic->ndev[k])
-			mqnic_destroy_netdev(mqnic->ndev[k]);
-	mqnic_unregister_phc(mqnic);
+fail_register:
 	pci_clear_master(pdev);
 fail_board:
 	mqnic_board_deinit(mqnic);
@@ -386,9 +475,7 @@ fail_map_bars:
 fail_regions:
 	pci_disable_device(pdev);
 fail_enable_device:
-	spin_lock(&mqnic_devices_lock);
-	list_del(&mqnic->dev_list_node);
-	spin_unlock(&mqnic_devices_lock);
+	mqnic_dev_free(mqnic);
 	return ret;
 }
 
@@ -400,20 +487,10 @@ static void mqnic_pci_remove(struct pci_dev *pdev)
 
 	dev_info(&pdev->dev, DRIVER_NAME " PCI remove");
 
-	misc_deregister(&mqnic->misc_dev);
-
-	spin_lock(&mqnic_devices_lock);
-	list_del(&mqnic->dev_list_node);
-	spin_unlock(&mqnic_devices_lock);
-
-	for (k = 0; k < ARRAY_SIZE(mqnic->ndev); k++)
-		if (mqnic->ndev[k])
-			mqnic_destroy_netdev(mqnic->ndev[k]);
-
-	mqnic_unregister_phc(mqnic);
+	mqnic_dev_unregister(mqnic);
 
 	pci_clear_master(pdev);
-	mqnic_board_deinit(mqnic);
+
 	for (k = 0; k < mqnic->irq_count; k++)
 		pci_free_irq(pdev, k, mqnic);
 	pci_free_irq_vectors(pdev);
@@ -423,6 +500,9 @@ static void mqnic_pci_remove(struct pci_dev *pdev)
 		pci_iounmap(pdev, mqnic->app_hw_addr);
 	if (mqnic->ram_hw_addr)
 		pci_iounmap(pdev, mqnic->ram_hw_addr);
+
+	mqnic_dev_free(mqnic);
+
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
 }
@@ -441,15 +521,286 @@ static struct pci_driver mqnic_pci_driver = {
 	.remove = mqnic_pci_remove,
 	.shutdown = mqnic_pci_shutdown
 };
+#endif /* CONFIG_PCI */
+
+#ifdef CONFIG_OF
+static int mqnic_platform_of_get(struct mqnic_dev *mqnic)
+{
+	int ret;
+	struct device *dev = mqnic->dev;
+	struct device_node *np;
+	struct i2c_client *cl;
+	int k;
+
+	if (!mqnic->dev->of_node)
+		return 0;
+
+	ret = 0;
+
+	np = of_parse_phandle(dev->of_node, MQNIC_PROP_MAC_ADDR_EEPROM, k);
+	if (!np) {
+		dev_warn(dev, "Missing phandle to MAC address EEPROM\n");
+	} else {
+		cl = of_find_i2c_device_by_node(np);
+		if (!cl) {
+			dev_warn(dev, "Failed to find I2C device for MAC address EEPROM\n");
+		} else {
+			u32 off;
+			u32 add;
+			bool local;
+
+			ret = of_property_read_u32(dev->of_node,
+					MQNIC_PROP_MAC_ADDR_OFF, &off);
+			if (ret == -EINVAL) {
+				off = 0;
+				ret = 0;
+			} else if (ret != 0) {
+				dev_err(dev, "Invalid property \"" MQNIC_PROP_MAC_ADDR_OFF "\"\n");
+				return ret;
+			}
+
+			ret = of_property_read_u32(dev->of_node,
+					MQNIC_PROP_MAC_ADDR_ADD, &add);
+			if (ret == -EINVAL) {
+				add = 0;
+				ret = 0;
+			} else if (ret != 0) {
+				dev_err(dev, "Invalid property \"" MQNIC_PROP_MAC_ADDR_ADD "\"\n");
+				return ret;
+			}
+
+			local = of_property_read_bool(dev->of_node,
+					MQNIC_PROP_MAC_ADDR_LOCAL);
+
+			init_mac_list_from_eeprom_base_opt(mqnic, cl, off,
+					mqnic->if_count, add, local);
+			put_device(&cl->dev);
+		}
+		of_node_put(np);
+	}
+
+	for (k = 0; k < mqnic->if_count; k++) {
+		np = of_parse_phandle(dev->of_node, MQNIC_PROP_MODULE_EEPROM,
+				k);
+		if (!np) {
+			dev_warn(dev, "Missing phandle to module EEPROM for interface %d\n", k);
+			continue;
+		}
+
+		cl = of_find_i2c_device_by_node(np);
+		if (!cl)
+			dev_warn(dev, "Failed to find I2C device for module of interface %d\n", k);
+		else
+			mqnic->mod_i2c_client[k] = cl;
+
+		of_node_put(np);
+	}
+
+	return ret;
+}
+
+static void mqnic_platform_of_put(struct mqnic_dev *mqnic)
+{
+	int k;
+
+	for (k = 0; k < mqnic->if_count; k++)
+		if (mqnic->mod_i2c_client)
+			put_device(&mqnic->mod_i2c_client[k]->dev);
+}
+#endif
+
+static int mqnic_platform_probe(struct platform_device *pdev)
+{
+	int ret = 0;
+	struct mqnic_dev *mqnic;
+	struct device *dev = &pdev->dev;
+	struct resource *res;
+
+	int k = 0;
+
+	dev_info(dev, DRIVER_NAME " platform probe");
+#ifdef CONFIG_NUMA
+	dev_info(dev, " NUMA node: %d", pdev->dev.numa_node);
+#endif
+
+	mqnic = mqnic_dev_alloc(dev);
+	if (!mqnic)
+		return -ENOMEM;
+
+	platform_set_drvdata(pdev, mqnic);
+
+	// Set DMA properties
+	ret = mqnic_dev_setdma(mqnic);
+	if (ret)
+		goto fail;
+
+	// Reserve and map regions
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	mqnic->hw_regs_size = resource_size(res);
+	mqnic->hw_regs_phys = res->start;
+
+	dev_info(dev, "Control BAR size: %llu", mqnic->hw_regs_size);
+	mqnic->hw_addr = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(mqnic->hw_addr)) {
+		ret = PTR_ERR(mqnic->hw_addr);
+		dev_err(dev, "Failed to map control BAR");
+		goto fail;
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (res) {
+		void __iomem *hw_addr;
+
+		mqnic->app_hw_regs_size = resource_size(res);
+		mqnic->app_hw_regs_phys = res->start;
+
+		dev_info(dev, "Application BAR size: %llu",
+				mqnic->app_hw_regs_size);
+		hw_addr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(hw_addr)) {
+			ret = PTR_ERR(hw_addr);
+			dev_err(dev, "Failed to map application BAR");
+			goto fail;
+		}
+		mqnic->app_hw_addr = hw_addr;
+	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+	if (res) {
+		void __iomem *hw_addr;
+
+		mqnic->ram_hw_regs_size = resource_size(res);
+		mqnic->ram_hw_regs_phys = res->start;
+
+		dev_info(dev, "Application BAR size: %llu",
+				mqnic->ram_hw_regs_size);
+		hw_addr = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(hw_addr)) {
+			ret = PTR_ERR(hw_addr);
+			dev_err(dev, "Failed to map RAM BAR");
+			goto fail;
+		}
+		mqnic->ram_hw_addr = hw_addr;
+	}
+
+	// Read ID registers
+	ret = mqnic_dev_readid(mqnic);
+	if (ret)
+		goto fail;
+
+	// Allocate IRQs
+	mqnic->irq_count = platform_irq_count(pdev);
+
+	// Set up interrupts
+	for (k = 0; k < mqnic->irq_count; k++) {
+		int irq;
+
+		irq = platform_get_irq(pdev, k);
+		if (irq < 0) {
+			ret = irq;
+			goto fail;
+		}
+
+		snprintf(mqnic->irq_name[k], sizeof(mqnic->irq_name[0]),
+			 "%s-%u", mqnic->name, k);
+		ret = devm_request_irq(dev, irq, mqnic_interrupt, 0,
+				mqnic->irq_name[k], mqnic);
+		if (ret < 0) {
+			dev_err(dev,
+				"Failed to request IRQ %d (device vector %d)",
+				irq, k);
+			goto fail;
+		}
+
+		mqnic->irq_map[k] = irq;
+	}
+
+#ifdef CONFIG_OF
+	ret = mqnic_platform_of_get(mqnic);
+	if (ret)
+		goto fail;
+#endif
+
+	// Register devices
+	ret = mqnic_dev_register(mqnic);
+	if (ret)
+		goto fail_register;
+
+	// probe complete
+	return 0;
+
+	// error handling
+fail_register:
+#ifdef CONFIG_OF
+	mqnic_platform_of_put(mqnic);
+#endif
+fail:
+	mqnic_dev_free(mqnic);
+	return ret;
+}
+
+static int mqnic_platform_remove(struct platform_device *pdev)
+{
+	struct mqnic_dev *mqnic = platform_get_drvdata(pdev);
+
+#ifdef CONFIG_OF
+	int k = 0;
+#endif
+
+	dev_info(&pdev->dev, DRIVER_NAME " platform remove");
+
+	mqnic_dev_unregister(mqnic);
+
+#ifdef CONFIG_OF
+	for (k = 0; k < mqnic->if_count; k++)
+		if (mqnic->mod_i2c_client)
+			put_device(&mqnic->mod_i2c_client[k]->dev);
+#endif
+
+	mqnic_dev_free(mqnic);
+
+	return 0;
+}
+
+static struct platform_driver mqnic_platform_driver = {
+	.probe = mqnic_platform_probe,
+	.remove = mqnic_platform_remove,
+	.driver = {
+		.name = DRIVER_NAME,
+		.of_match_table = of_match_ptr(mqnic_of_id_table),
+	},
+};
 
 static int __init mqnic_init(void)
 {
-	return pci_register_driver(&mqnic_pci_driver);
+	int rc;
+
+#ifdef CONFIG_PCI
+	rc = pci_register_driver(&mqnic_pci_driver);
+	if (rc)
+		return rc;
+#endif
+
+	rc = platform_driver_register(&mqnic_platform_driver);
+	if (rc)
+		goto err;
+
+	return 0;
+
+err:
+#ifdef CONFIG_PCI
+	pci_unregister_driver(&mqnic_pci_driver);
+#endif
+	return rc;
 }
 
 static void __exit mqnic_exit(void)
 {
+	platform_driver_unregister(&mqnic_platform_driver);
+
+#ifdef CONFIG_PCI
 	pci_unregister_driver(&mqnic_pci_driver);
+#endif
 }
 
 module_init(mqnic_init);

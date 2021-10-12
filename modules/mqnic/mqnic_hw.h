@@ -38,6 +38,13 @@
 
 #include <linux/types.h>
 
+/* platform driver OF-related definitions */
+#define MQNIC_PROP_MAC_ADDR_EEPROM "mac-addr-eeprom"
+#define MQNIC_PROP_MAC_ADDR_OFF "mac-addr-offset"
+#define MQNIC_PROP_MAC_ADDR_ADD "mac-addr-add"
+#define MQNIC_PROP_MAC_ADDR_LOCAL "mac-addr-local"
+#define MQNIC_PROP_MODULE_EEPROM "module-eeproms"
+
 #define MQNIC_MAX_IF 8
 #define MQNIC_MAX_PORTS 8
 #define MQNIC_MAX_SCHED 8
