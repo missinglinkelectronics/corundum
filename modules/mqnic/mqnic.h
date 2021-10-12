@@ -80,7 +80,6 @@ struct mqnic_i2c_bus {
 
 struct mqnic_dev {
 	struct device *dev;
-	struct pci_dev *pdev;
 
 	resource_size_t hw_regs_size;
 	phys_addr_t hw_regs_phys;

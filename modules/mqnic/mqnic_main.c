@@ -163,7 +163,6 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 		return -ENOMEM;
 
 	mqnic->dev = dev;
-	mqnic->pdev = pdev;
 	pci_set_drvdata(pdev, mqnic);
 
 	// assign ID and add to list
