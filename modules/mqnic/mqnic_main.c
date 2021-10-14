@@ -296,6 +296,7 @@ static int mqnic_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent
 				mqnic, "%s-%d", mqnic->name, k);
 		if (ret < 0) {
 			dev_err(dev, "Failed to request IRQ");
+			mqnic->irq_count = k;
 			goto fail_irq;
 		}
 
@@ -365,9 +366,9 @@ fail_init_netdev:
 	pci_clear_master(pdev);
 fail_board:
 	mqnic_board_deinit(mqnic);
+fail_irq:
 	for (k = 0; k < mqnic->irq_count; k++)
 		pci_free_irq(pdev, k, mqnic);
-fail_irq:
 	pci_free_irq_vectors(pdev);
 fail_map_bars:
 	if (mqnic->hw_addr)
