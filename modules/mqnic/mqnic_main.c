@@ -47,6 +47,12 @@ MODULE_AUTHOR("Alex Forencich");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(DRIVER_VERSION);
 
+unsigned int mqnic_num_queue_entries = 1024;
+
+module_param_named(num_queue_entries, mqnic_num_queue_entries,
+		   uint, 0644);
+MODULE_PARM_DESC(num_queue_entries, "number of queue entries to allocate per queue (default: 1024)");
+
 static const struct pci_device_id mqnic_pci_id_table[] = {
 	{PCI_DEVICE(0x1234, 0x1001)},
 	{PCI_DEVICE(0x5543, 0x1001)},

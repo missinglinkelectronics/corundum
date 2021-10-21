@@ -52,6 +52,8 @@
 
 #include "mqnic_hw.h"
 
+extern unsigned int mqnic_num_queue_entries;
+
 struct mqnic_dev;
 
 struct mqnic_board_ops {
