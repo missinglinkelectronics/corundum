@@ -356,6 +356,12 @@ int mqnic_i2c_init(struct mqnic_dev *mqnic);
 void mqnic_i2c_deinit(struct mqnic_dev *mqnic);
 
 // mqnic_board.c
+int init_mac_list_from_eeprom_base_opt(struct mqnic_dev *mqnic,
+		struct i2c_client *eeprom, int offset, int count, int add,
+		bool local);
+#define init_mac_list_from_eeprom_base(mqnic, eeprom, offset, count) \
+		init_mac_list_from_eeprom_base_opt(mqnic, eeprom, offset, \
+				count, -1, false)
 int mqnic_board_init(struct mqnic_dev *mqnic);
 void mqnic_board_deinit(struct mqnic_dev *mqnic);
 
