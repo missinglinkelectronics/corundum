@@ -283,33 +283,21 @@ module fpga_core #
     output wire                               status_error_uncor,
 
     /*
-     * Ethernet: SFP+
+     * Ethernet: 10/100/1000BASE-T SGMII
      */
-    input  wire                               sfp0_tx_clk,
-    input  wire                               sfp0_tx_rst,
-    output wire [63:0]                        sfp0_txd,
-    output wire [7:0]                         sfp0_txc,
-    output wire                               sfp0_tx_prbs31_enable,
-    input  wire                               sfp0_rx_clk,
-    input  wire                               sfp0_rx_rst,
-    input  wire [63:0]                        sfp0_rxd,
-    input  wire [7:0]                         sfp0_rxc,
-    output wire                               sfp0_rx_prbs31_enable,
-    input  wire [6:0]                         sfp0_rx_error_count,
     output wire                               sfp0_tx_disable_b,
-
-    input  wire                               sfp1_tx_clk,
-    input  wire                               sfp1_tx_rst,
-    output wire [63:0]                        sfp1_txd,
-    output wire [7:0]                         sfp1_txc,
-    output wire                               sfp1_tx_prbs31_enable,
-    input  wire                               sfp1_rx_clk,
-    input  wire                               sfp1_rx_rst,
-    input  wire [63:0]                        sfp1_rxd,
-    input  wire [7:0]                         sfp1_rxc,
-    output wire                               sfp1_rx_prbs31_enable,
-    input  wire [6:0]                         sfp1_rx_error_count,
-    output wire                               sfp1_tx_disable_b
+    output wire                               sfp1_tx_disable_b,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_clk_en,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_rxclk,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_rxrst,
+    input  wire [8*IF_COUNT*PORTS_PER_IF-1:0] phy_gmii_rxd,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_rx_dv,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_rx_er,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_txclk,
+    input  wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_txrst,
+    output wire [8*IF_COUNT*PORTS_PER_IF-1:0] phy_gmii_txd,
+    output wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_tx_en,
+    output wire [IF_COUNT*PORTS_PER_IF-1:0]   phy_gmii_tx_er
 );
 
 parameter PORT_COUNT = IF_COUNT*PORTS_PER_IF;
@@ -473,54 +461,6 @@ always @(posedge clk_250mhz) begin
     pps_led_reg <= pps_led_counter_reg > 0;
 end
 
-// BER tester
-tdma_ber #(
-    .COUNT(2),
-    .INDEX_WIDTH(6),
-    .SLICE_WIDTH(5),
-    .AXIL_DATA_WIDTH(AXIL_CTRL_DATA_WIDTH),
-    .AXIL_ADDR_WIDTH(8+6+$clog2(2)),
-    .AXIL_STRB_WIDTH(AXIL_CTRL_STRB_WIDTH),
-    .SCHEDULE_START_S(0),
-    .SCHEDULE_START_NS(0),
-    .SCHEDULE_PERIOD_S(0),
-    .SCHEDULE_PERIOD_NS(1000000),
-    .TIMESLOT_PERIOD_S(0),
-    .TIMESLOT_PERIOD_NS(100000),
-    .ACTIVE_PERIOD_S(0),
-    .ACTIVE_PERIOD_NS(90000)
-)
-tdma_ber_inst (
-    .clk(clk_250mhz),
-    .rst(rst_250mhz),
-    .phy_tx_clk({sfp1_tx_clk, sfp0_tx_clk}),
-    .phy_rx_clk({sfp1_rx_clk, sfp0_rx_clk}),
-    .phy_rx_error_count({sfp1_rx_error_count, sfp0_rx_error_count}),
-    .phy_tx_prbs31_enable({sfp1_tx_prbs31_enable, sfp0_tx_prbs31_enable}),
-    .phy_rx_prbs31_enable({sfp1_rx_prbs31_enable, sfp0_rx_prbs31_enable}),
-    .s_axil_awaddr(axil_csr_awaddr),
-    .s_axil_awprot(axil_csr_awprot),
-    .s_axil_awvalid(axil_csr_awvalid),
-    .s_axil_awready(axil_csr_awready),
-    .s_axil_wdata(axil_csr_wdata),
-    .s_axil_wstrb(axil_csr_wstrb),
-    .s_axil_wvalid(axil_csr_wvalid),
-    .s_axil_wready(axil_csr_wready),
-    .s_axil_bresp(axil_csr_bresp),
-    .s_axil_bvalid(axil_csr_bvalid),
-    .s_axil_bready(axil_csr_bready),
-    .s_axil_araddr(axil_csr_araddr),
-    .s_axil_arprot(axil_csr_arprot),
-    .s_axil_arvalid(axil_csr_arvalid),
-    .s_axil_arready(axil_csr_arready),
-    .s_axil_rdata(axil_csr_rdata),
-    .s_axil_rresp(axil_csr_rresp),
-    .s_axil_rvalid(axil_csr_rvalid),
-    .s_axil_rready(axil_csr_rready),
-    .ptp_ts_96(ptp_ts_96),
-    .ptp_ts_step(ptp_ts_step)
-);
-
 assign led[0] = pps_led_reg;
 assign led[7:1] = 0;
 
@@ -555,115 +495,61 @@ wire [PORT_COUNT-1:0]                         axis_eth_rx_tready;
 wire [PORT_COUNT-1:0]                         axis_eth_rx_tlast;
 wire [PORT_COUNT*AXIS_ETH_RX_USER_WIDTH-1:0]  axis_eth_rx_tuser;
 
-wire [PORT_COUNT-1:0]                   port_xgmii_tx_clk;
-wire [PORT_COUNT-1:0]                   port_xgmii_tx_rst;
-wire [PORT_COUNT*XGMII_DATA_WIDTH-1:0]  port_xgmii_txd;
-wire [PORT_COUNT*XGMII_CTRL_WIDTH-1:0]  port_xgmii_txc;
-
-wire [PORT_COUNT-1:0]                   port_xgmii_rx_clk;
-wire [PORT_COUNT-1:0]                   port_xgmii_rx_rst;
-wire [PORT_COUNT*XGMII_DATA_WIDTH-1:0]  port_xgmii_rxd;
-wire [PORT_COUNT*XGMII_CTRL_WIDTH-1:0]  port_xgmii_rxc;
-
-//  counts
-// IF  PORT   SFP0     SFP1
-// 1   1      0 (0.0)
-// 1   2      0 (0.0)  1 (0.1)
-// 2   1      0 (0.0)  1 (1.0)
-
-localparam SFP0_IND = 0;
-localparam SFP1_IND = 1;
-
 generate
     genvar m, n;
 
-    if (SFP0_IND >= 0 && SFP0_IND < PORT_COUNT) begin
-        assign port_xgmii_tx_clk[SFP0_IND] = sfp0_tx_clk;
-        assign port_xgmii_tx_rst[SFP0_IND] = sfp0_tx_rst;
-        assign port_xgmii_rx_clk[SFP0_IND] = sfp0_rx_clk;
-        assign port_xgmii_rx_rst[SFP0_IND] = sfp0_rx_rst;
-        assign port_xgmii_rxd[SFP0_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH] = sfp0_rxd;
-        assign port_xgmii_rxc[SFP0_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH] = sfp0_rxc;
-
-        assign sfp0_txd = port_xgmii_txd[SFP0_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH];
-        assign sfp0_txc = port_xgmii_txc[SFP0_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH];
-    end else begin
-        assign sfp0_txd = {XGMII_CTRL_WIDTH{8'h07}};
-        assign sfp0_txc = {XGMII_CTRL_WIDTH{1'b1}};
-    end
-
-    if (SFP1_IND >= 0 && SFP1_IND < PORT_COUNT) begin
-        assign port_xgmii_tx_clk[SFP1_IND] = sfp1_tx_clk;
-        assign port_xgmii_tx_rst[SFP1_IND] = sfp1_tx_rst;
-        assign port_xgmii_rx_clk[SFP1_IND] = sfp1_rx_clk;
-        assign port_xgmii_rx_rst[SFP1_IND] = sfp1_rx_rst;
-        assign port_xgmii_rxd[SFP1_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH] = sfp1_rxd;
-        assign port_xgmii_rxc[SFP1_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH] = sfp1_rxc;
-
-        assign sfp1_txd = port_xgmii_txd[SFP1_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH];
-        assign sfp1_txc = port_xgmii_txc[SFP1_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH];
-    end else begin
-        assign sfp1_txd = {XGMII_CTRL_WIDTH{8'h07}};
-        assign sfp1_txc = {XGMII_CTRL_WIDTH{1'b1}};
-    end
-
     for (n = 0; n < PORT_COUNT; n = n + 1) begin : mac
 
-        assign eth_tx_clk[n] = port_xgmii_tx_clk[n];
-        assign eth_tx_rst[n] = port_xgmii_tx_rst[n];
-        assign eth_rx_clk[n] = port_xgmii_rx_clk[n];
-        assign eth_rx_rst[n] = port_xgmii_rx_rst[n];
+        assign eth_tx_clk[n] = phy_gmii_txclk[n];
+        assign eth_tx_rst[n] = phy_gmii_txrst[n];
+        assign eth_rx_clk[n] = phy_gmii_rxclk[n];
+        assign eth_rx_rst[n] = phy_gmii_rxrst[n];
 
-        eth_mac_10g #(
-            .DATA_WIDTH(AXIS_ETH_DATA_WIDTH),
-            .KEEP_WIDTH(AXIS_ETH_KEEP_WIDTH),
-            .ENABLE_PADDING(ENABLE_PADDING),
-            .ENABLE_DIC(ENABLE_DIC),
-            .MIN_FRAME_LENGTH(MIN_FRAME_LENGTH),
-            .PTP_PERIOD_NS(IF_PTP_PERIOD_NS),
-            .PTP_PERIOD_FNS(IF_PTP_PERIOD_FNS),
+        eth_mac_1g #(
+            .DATA_WIDTH(8),
+            .ENABLE_PADDING(1),
+            .MIN_FRAME_LENGTH(64),
             .TX_PTP_TS_ENABLE(PTP_TS_ENABLE),
             .TX_PTP_TS_WIDTH(PTP_TS_WIDTH),
             .TX_PTP_TAG_ENABLE(PTP_TS_ENABLE),
             .TX_PTP_TAG_WIDTH(PTP_TAG_WIDTH),
             .RX_PTP_TS_ENABLE(PTP_TS_ENABLE),
-            .RX_PTP_TS_WIDTH(PTP_TS_WIDTH),
-            .TX_USER_WIDTH(AXIS_ETH_TX_USER_WIDTH),
-            .RX_USER_WIDTH(AXIS_ETH_RX_USER_WIDTH)
+            .RX_PTP_TS_WIDTH(PTP_TS_WIDTH)
         )
         eth_mac_inst (
-            .tx_clk(port_xgmii_tx_clk[n]),
-            .tx_rst(port_xgmii_tx_rst[n]),
-            .rx_clk(port_xgmii_rx_clk[n]),
-            .rx_rst(port_xgmii_rx_rst[n]),
+            .rx_clk(phy_gmii_rxclk[n]),
+            .rx_rst(phy_gmii_rxrst[n]),
+            .tx_clk(phy_gmii_txclk[n]),
+            .tx_rst(phy_gmii_txrst[n]),
 
             .tx_axis_tdata(axis_eth_tx_tdata[n*AXIS_ETH_DATA_WIDTH +: AXIS_ETH_DATA_WIDTH]),
-            .tx_axis_tkeep(axis_eth_tx_tkeep[n*AXIS_ETH_KEEP_WIDTH +: AXIS_ETH_KEEP_WIDTH]),
             .tx_axis_tvalid(axis_eth_tx_tvalid[n +: 1]),
             .tx_axis_tready(axis_eth_tx_tready[n +: 1]),
             .tx_axis_tlast(axis_eth_tx_tlast[n +: 1]),
             .tx_axis_tuser(axis_eth_tx_tuser[n*AXIS_ETH_TX_USER_WIDTH +: AXIS_ETH_TX_USER_WIDTH]),
 
             .rx_axis_tdata(axis_eth_rx_tdata[n*AXIS_ETH_DATA_WIDTH +: AXIS_ETH_DATA_WIDTH]),
-            .rx_axis_tkeep(axis_eth_rx_tkeep[n*AXIS_ETH_KEEP_WIDTH +: AXIS_ETH_KEEP_WIDTH]),
             .rx_axis_tvalid(axis_eth_rx_tvalid[n +: 1]),
             .rx_axis_tlast(axis_eth_rx_tlast[n +: 1]),
             .rx_axis_tuser(axis_eth_rx_tuser[n*AXIS_ETH_RX_USER_WIDTH +: AXIS_ETH_RX_USER_WIDTH]),
 
-            .xgmii_rxd(port_xgmii_rxd[n*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH]),
-            .xgmii_rxc(port_xgmii_rxc[n*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH]),
-            .xgmii_txd(port_xgmii_txd[n*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH]),
-            .xgmii_txc(port_xgmii_txc[n*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH]),
+            .gmii_rxd(phy_gmii_rxd[XGMII_DATA_WIDTH*n+:XGMII_DATA_WIDTH]),
+            .gmii_rx_dv(phy_gmii_rx_dv[n]),
+            .gmii_rx_er(phy_gmii_rx_er[n]),
+            .gmii_txd(phy_gmii_txd[XGMII_DATA_WIDTH*n+:XGMII_DATA_WIDTH]),
+            .gmii_tx_en(phy_gmii_tx_en[n]),
+            .gmii_tx_er(phy_gmii_tx_er[n]),
+
+            .rx_clk_enable(phy_gmii_clk_en[n]),
+            .tx_clk_enable(phy_gmii_clk_en[n]),
+            .rx_mii_select(1'b0),
+            .tx_mii_select(1'b0),
 
             .tx_ptp_ts(eth_tx_ptp_ts_96[n*PTP_TS_WIDTH +: PTP_TS_WIDTH]),
             .rx_ptp_ts(eth_rx_ptp_ts_96[n*PTP_TS_WIDTH +: PTP_TS_WIDTH]),
             .tx_axis_ptp_ts(axis_eth_tx_ptp_ts[n*PTP_TS_WIDTH +: PTP_TS_WIDTH]),
             .tx_axis_ptp_ts_tag(axis_eth_tx_ptp_ts_tag[n*PTP_TAG_WIDTH +: PTP_TAG_WIDTH]),
             .tx_axis_ptp_ts_valid(axis_eth_tx_ptp_ts_valid[n +: 1]),
-
-            .tx_error_underflow(),
-            .rx_error_bad_frame(),
-            .rx_error_bad_fcs(),
 
             .ifg_delay(8'd12)
         );

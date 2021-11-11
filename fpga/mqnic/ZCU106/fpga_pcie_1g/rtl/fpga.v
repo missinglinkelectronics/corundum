@@ -205,6 +205,8 @@ module fpga #
     output wire         sfp1_tx_disable_b
 );
 
+parameter PORT_COUNT = IF_COUNT * PORTS_PER_IF;
+
 // PTP configuration
 parameter PTP_TS_WIDTH = 96;
 parameter PTP_TAG_WIDTH = 16;
@@ -221,11 +223,11 @@ parameter IF_PTP_PERIOD_FNS = 16'h6666;
 parameter MSI_COUNT = 32;
 
 // Ethernet interface configuration
-parameter XGMII_DATA_WIDTH = 64;
+parameter XGMII_DATA_WIDTH = 8;
 parameter XGMII_CTRL_WIDTH = XGMII_DATA_WIDTH/8;
 parameter AXIS_ETH_DATA_WIDTH = XGMII_DATA_WIDTH;
 parameter AXIS_ETH_KEEP_WIDTH = AXIS_ETH_DATA_WIDTH/8;
-parameter AXIS_ETH_SYNC_DATA_WIDTH = AXIS_ETH_DATA_WIDTH;
+parameter AXIS_ETH_SYNC_DATA_WIDTH = 32;
 parameter AXIS_ETH_TX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TAG_WIDTH : 0) + 1;
 parameter AXIS_ETH_RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1;
 
@@ -234,11 +236,11 @@ wire pcie_user_clk;
 wire pcie_user_reset;
 
 wire clk_125mhz_ibufg;
-wire clk_125mhz_mmcm_out;
+wire clk_625mhz_mmcm_out;
 
-// Internal 125 MHz clock
-wire clk_125mhz_int;
-wire rst_125mhz_int;
+// Internal 62.5 MHz clock
+wire clk_625mhz_int;
+wire rst_625mhz_int;
 
 // Internal 156.25 MHz clock
 wire clk_156mhz_int;
@@ -259,14 +261,14 @@ clk_125mhz_ibufg_inst (
 );
 
 // MMCM instance
-// 125 MHz in, 125 MHz out
+// 125 MHz in, 62.5 MHz out
 // PFD range: 10 MHz to 500 MHz
 // VCO range: 800 MHz to 1600 MHz
 // M = 8, D = 1 sets Fvco = 1000 MHz (in range)
-// Divide by 8 to get output frequency of 125 MHz
+// Divide by 16 to get output frequency of 62.5 MHz
 MMCME3_BASE #(
     .BANDWIDTH("OPTIMIZED"),
-    .CLKOUT0_DIVIDE_F(8),
+    .CLKOUT0_DIVIDE_F(16),
     .CLKOUT0_DUTY_CYCLE(0.5),
     .CLKOUT0_PHASE(0),
     .CLKOUT1_DIVIDE(1),
@@ -300,7 +302,7 @@ clk_mmcm_inst (
     .CLKFBIN(mmcm_clkfb),
     .RST(mmcm_rst),
     .PWRDWN(1'b0),
-    .CLKOUT0(clk_125mhz_mmcm_out),
+    .CLKOUT0(clk_625mhz_mmcm_out),
     .CLKOUT0B(),
     .CLKOUT1(),
     .CLKOUT1B(),
@@ -317,18 +319,18 @@ clk_mmcm_inst (
 );
 
 BUFG
-clk_125mhz_bufg_inst (
-    .I(clk_125mhz_mmcm_out),
-    .O(clk_125mhz_int)
+clk_625mhz_bufg_inst (
+    .I(clk_625mhz_mmcm_out),
+    .O(clk_625mhz_int)
 );
 
 sync_reset #(
     .N(4)
 )
-sync_reset_125mhz_inst (
-    .clk(clk_125mhz_int),
+sync_reset_625mhz_inst (
+    .clk(clk_625mhz_int),
     .rst(~mmcm_locked),
-    .out(rst_125mhz_int)
+    .out(rst_625mhz_int)
 );
 
 // GPIO
@@ -664,143 +666,190 @@ pcie4_uscale_plus_inst (
     .phy_rdy_out()
 );
 
-// XGMII 10G PHY
-wire                         sfp0_tx_clk_int;
-wire                         sfp0_tx_rst_int;
-wire [XGMII_DATA_WIDTH-1:0]  sfp0_txd_int;
-wire [XGMII_CTRL_WIDTH-1:0]  sfp0_txc_int;
-wire                         sfp0_tx_prbs31_enable_int;
-wire                         sfp0_rx_clk_int;
-wire                         sfp0_rx_rst_int;
-wire [XGMII_DATA_WIDTH-1:0]  sfp0_rxd_int;
-wire [XGMII_CTRL_WIDTH-1:0]  sfp0_rxc_int;
-wire                         sfp0_rx_prbs31_enable_int;
-wire [6:0]                   sfp0_rx_error_count_int;
+// SGMII interface to PHY
 
-wire                         sfp1_tx_clk_int;
-wire                         sfp1_tx_rst_int;
-wire [XGMII_DATA_WIDTH-1:0]  sfp1_txd_int;
-wire [XGMII_CTRL_WIDTH-1:0]  sfp1_txc_int;
-wire                         sfp1_tx_prbs31_enable_int;
-wire                         sfp1_rx_clk_int;
-wire                         sfp1_rx_rst_int;
-wire [XGMII_DATA_WIDTH-1:0]  sfp1_rxd_int;
-wire [XGMII_CTRL_WIDTH-1:0]  sfp1_rxc_int;
-wire                         sfp1_rx_prbs31_enable_int;
-wire [6:0]                   sfp1_rx_error_count_int;
+wire [PORT_COUNT-1:0]   pcspma_tx_p;
+wire [PORT_COUNT-1:0]   pcspma_tx_n;
+wire [PORT_COUNT-1:0]   pcspma_rx_p;
+wire [PORT_COUNT-1:0]   pcspma_rx_n;
+assign pcspma_tx_p[0] = sfp0_tx_p;
+assign pcspma_tx_n[0] = sfp0_tx_n;
+assign pcspma_rx_p[0] = sfp0_rx_p;
+assign pcspma_rx_n[0] = sfp0_rx_n;
+assign pcspma_tx_p[1] = sfp1_tx_p;
+assign pcspma_tx_n[1] = sfp1_tx_n;
+assign pcspma_rx_p[1] = sfp1_rx_p;
+assign pcspma_rx_n[1] = sfp1_rx_n;
 
-wire sfp0_rx_block_lock;
-wire sfp1_rx_block_lock;
+wire                    pcspma_mgtrefclk;
+wire [PORT_COUNT-1:0]   pcspma_clk_en;
+wire [PORT_COUNT-1:0]   pcspma_reset_done;
+wire [PORT_COUNT-1:0]   pcspma_txoutclk;
+wire [PORT_COUNT-1:0]   pcspma_rxoutclk;
+wire [PORT_COUNT-1:0]   pcspma_userclk;
+wire [PORT_COUNT-1:0]   pcspma_userclk2;
+wire [PORT_COUNT-1:0]   pcspma_rxuserclk;
+wire [PORT_COUNT-1:0]   pcspma_rxuserclk2;
 
-wire sfp_mgt_refclk_0;
+// [15:14] :    Pause
+// [13] :       Remote Fault
+// [12] :       Duplex
+// [11:10] :    Speed (10, 100, 1000, reserved)
+// [9:8] :      Remote Fault Encoding
+// [7] :        PHY Link Status
+// [6] :        RX not in table
+// [5] :        RX Disperrity Error
+// [4] :        RUDI invalid
+// [3] :        RUDI(/I/)
+// [2] :        RUDI(/C/)
+// [1] :        Link Synchronistation
+// [0] :        Link Status
+wire [16*PORT_COUNT-1:0]    pcspma_status_vector;
+wire [5*PORT_COUNT-1:0]     pcspma_config_vector;
+wire [16*PORT_COUNT-1:0]    pcspma_an_config_vector;
 
-IBUFDS_GTE4 ibufds_gte4_sfp_mgt_refclk_0_inst (
+wire [PORT_COUNT-1:0]       pcspma_gmii_clk_en;
+wire [PORT_COUNT-1:0]       pcspma_gmii_txclk;
+wire [PORT_COUNT-1:0]       pcspma_gmii_txrst;
+wire [XGMII_DATA_WIDTH*PORT_COUNT-1:0] pcspma_gmii_txd;
+wire [PORT_COUNT-1:0]       pcspma_gmii_tx_en;
+wire [PORT_COUNT-1:0]       pcspma_gmii_tx_er;
+wire [PORT_COUNT-1:0]       pcspma_gmii_rxclk;
+wire [PORT_COUNT-1:0]       pcspma_gmii_rxrst;
+wire [XGMII_DATA_WIDTH*PORT_COUNT-1:0] pcspma_gmii_rxd;
+wire [PORT_COUNT-1:0]       pcspma_gmii_rx_dv;
+wire [PORT_COUNT-1:0]       pcspma_gmii_rx_er;
+
+IBUFDS_GTE4 ibufds_gtrefclk (
     .I     (sfp_mgt_refclk_0_p),
     .IB    (sfp_mgt_refclk_0_n),
     .CEB   (1'b0),
-    .O     (sfp_mgt_refclk_0),
+    .O     (pcspma_mgtrefclk),
     .ODIV2 ()
 );
 
-wire sfp_qpll0lock;
-wire sfp_qpll0outclk;
-wire sfp_qpll0outrefclk;
+wire pma_reset;
+assign pma_reset = pma_reset_pipe[3];
+(* async_reg = "true" *)reg [3:0] pma_reset_pipe;
+always @(posedge clk_625mhz_int) begin
+    if (rst_625mhz_int == 1'b1)
+        pma_reset_pipe <= 4'b1111;
+    else
+        pma_reset_pipe <= {pma_reset_pipe[2:0], rst_625mhz_int};
+end
 
-eth_xcvr_phy_wrapper #(
-    .HAS_COMMON(1),
-    .PRBS31_ENABLE(1)
-)
-sfp0_phy_inst (
-    .xcvr_ctrl_clk(clk_125mhz_int),
-    .xcvr_ctrl_rst(rst_125mhz_int),
+genvar n;
+generate for (n = 0 ; n < PORT_COUNT ; n = n + 1) begin
 
-    // Common
-    .xcvr_gtpowergood_out(),
+    wire [15:0] pcspma_status = pcspma_status_vector[n*16+:16];
+    wire [1:0]  pcspma_status_speed = pcspma_status[11:10];
 
-    // PLL out
-    .xcvr_gtrefclk00_in(sfp_mgt_refclk_0),
-    .xcvr_qpll0lock_out(sfp_qpll0lock),
-    .xcvr_qpll0outclk_out(sfp_qpll0outclk),
-    .xcvr_qpll0outrefclk_out(sfp_qpll0outrefclk),
+    // [4] : autonegotiation enable
+    // [3] : isolate
+    // [2] : power down
+    // [1] : loopback enable
+    // [0] : unidirectional enable
+    assign pcspma_config_vector[5*n+:5] = 5'b10000;
 
-    // PLL in
-    .xcvr_qpll0lock_in(1'b0),
-    .xcvr_qpll0reset_out(),
-    .xcvr_qpll0clk_in(1'b0),
-    .xcvr_qpll0refclk_in(1'b0),
+    // [15] :    SGMII link status
+    // [14] :    SGMII Acknowledge
+    // [13:12] : full duplex
+    // [11:10] : SGMII speed
+    // [9] :     reserved
+    // [8:7] :   pause frames - SGMII reserved
+    // [6] :     reserved
+    // [5] :     full duplex - SGMII reserved
+    // [4:1] :   reserved
+    // [0] :     SGMII
+    assign pcspma_an_config_vector[16*n+:16] =
+            { 1'b1, 1'b1, 2'b01, 2'b10, 1'b0, 2'b00, 1'b0, 1'b0, 4'b0000, 1'b1 };
 
-    // Serial data
-    .xcvr_txp(sfp0_tx_p),
-    .xcvr_txn(sfp0_tx_n),
-    .xcvr_rxp(sfp0_rx_p),
-    .xcvr_rxn(sfp0_rx_n),
 
-    // PHY connections
-    .phy_tx_clk(sfp0_tx_clk_int),
-    .phy_tx_rst(sfp0_tx_rst_int),
-    .phy_xgmii_txd(sfp0_txd_int),
-    .phy_xgmii_txc(sfp0_txc_int),
-    .phy_rx_clk(sfp0_rx_clk_int),
-    .phy_rx_rst(sfp0_rx_rst_int),
-    .phy_xgmii_rxd(sfp0_rxd_int),
-    .phy_xgmii_rxc(sfp0_rxc_int),
-    .phy_tx_bad_block(),
-    .phy_rx_error_count(sfp0_rx_error_count_int),
-    .phy_rx_bad_block(),
-    .phy_rx_sequence_error(),
-    .phy_rx_block_lock(sfp0_rx_block_lock),
-    .phy_rx_high_ber(),
-    .phy_tx_prbs31_enable(sfp0_tx_prbs31_enable_int),
-    .phy_rx_prbs31_enable(sfp0_rx_prbs31_enable_int)
-);
+    // rxuserclk and rxuserclk2 identical as RxGmiiClkSrc!=RXOUTCLK
+    assign pcspma_rxuserclk2[n] = pcspma_rxuserclk[n];
+    assign pcspma_gmii_rxclk[n] = pcspma_userclk2[n];
+    assign pcspma_gmii_txclk[n] = pcspma_userclk2[n];
 
-eth_xcvr_phy_wrapper #(
-    .HAS_COMMON(0),
-    .PRBS31_ENABLE(1)
-)
-sfp1_phy_inst (
-    .xcvr_ctrl_clk(clk_125mhz_int),
-    .xcvr_ctrl_rst(rst_125mhz_int),
+    BUFG_GT bufg_gt_userclk_inst (
+        .I     (pcspma_txoutclk[n]),
+        .CE    (1'b1),
+        .DIV   (3'b001),
+        .O     (pcspma_userclk[n])
+    );
 
-    // Common
-    .xcvr_gtpowergood_out(),
+    BUFG_GT bufg_gt_userclk2_inst (
+        .I     (pcspma_txoutclk[n]),
+        .CE    (1'b1),
+        .O     (pcspma_userclk2[n])
+    );
 
-    // PLL out
-    .xcvr_gtrefclk00_in(1'b0),
-    .xcvr_qpll0lock_out(),
-    .xcvr_qpll0outclk_out(),
-    .xcvr_qpll0outrefclk_out(),
+    BUFG_GT bufg_gt_rxusrclk2_inst (
+        .I     (pcspma_rxoutclk[n]),
+        .CE    (1'b1),
+        .O     (pcspma_rxuserclk[n])
+    );
 
-    // PLL in
-    .xcvr_qpll0lock_in(sfp_qpll0lock),
-    .xcvr_qpll0reset_out(),
-    .xcvr_qpll0clk_in(sfp_qpll0outclk),
-    .xcvr_qpll0refclk_in(sfp_qpll0outrefclk),
+    sync_reset #(
+        .N(4)
+    )
+    sync_reset_pcspma_rx_inst (
+        .clk(pcspma_gmii_rxclk[n]),
+        .rst(rst_625mhz_int),
+        .out(pcspma_gmii_rxrst[n])
+    );
 
-    // Serial data
-    .xcvr_txp(sfp1_tx_p),
-    .xcvr_txn(sfp1_tx_n),
-    .xcvr_rxp(sfp1_rx_p),
-    .xcvr_rxn(sfp1_rx_n),
+    sync_reset #(
+        .N(4)
+    )
+    sync_reset_pcspma_tx_inst (
+        .clk(pcspma_gmii_txclk[n]),
+        .rst(rst_625mhz_int),
+        .out(pcspma_gmii_txrst[n])
+    );
 
-    // PHY connections
-    .phy_tx_clk(sfp1_tx_clk_int),
-    .phy_tx_rst(sfp1_tx_rst_int),
-    .phy_xgmii_txd(sfp1_txd_int),
-    .phy_xgmii_txc(sfp1_txc_int),
-    .phy_rx_clk(sfp1_rx_clk_int),
-    .phy_rx_rst(sfp1_rx_rst_int),
-    .phy_xgmii_rxd(sfp1_rxd_int),
-    .phy_xgmii_rxc(sfp1_rxc_int),
-    .phy_tx_bad_block(),
-    .phy_rx_error_count(sfp1_rx_error_count_int),
-    .phy_rx_bad_block(),
-    .phy_rx_sequence_error(),
-    .phy_rx_block_lock(sfp1_rx_block_lock),
-    .phy_rx_high_ber(),
-    .phy_tx_prbs31_enable(sfp1_tx_prbs31_enable_int),
-    .phy_rx_prbs31_enable(sfp1_rx_prbs31_enable_int)
-);
+    gig_ethernet_pcs_pma_0 eth_pcspma (
+        // Transceiver Interface
+        .gtrefclk              (pcspma_mgtrefclk),
+        .txp                   (pcspma_tx_p[n]),
+        .txn                   (pcspma_tx_n[n]),
+        .rxp                   (pcspma_rx_p[n]),
+        .rxn                   (pcspma_rx_n[n]),
+        .resetdone             (pcspma_reset_done[n]),
+        .cplllock              (),
+        .mmcm_reset            (),
+        .txoutclk              (pcspma_txoutclk[n]),
+        .rxoutclk              (pcspma_rxoutclk[n]),
+        .userclk               (pcspma_userclk[n]),
+        .userclk2              (pcspma_userclk2[n]),
+        .rxuserclk             (pcspma_rxuserclk[n]),
+        .rxuserclk2            (pcspma_rxuserclk2[n]),
+        .independent_clock_bufg(clk_625mhz_int),
+        .pma_reset             (pma_reset),
+        .mmcm_locked           (mmcm_locked),
+        // GMII Interface
+        .sgmii_clk_en          (pcspma_gmii_clk_en[n]),
+        .gmii_txd              (pcspma_gmii_txd[n*XGMII_DATA_WIDTH+:XGMII_DATA_WIDTH]),
+        .gmii_tx_en            (pcspma_gmii_tx_en[n]),
+        .gmii_tx_er            (pcspma_gmii_tx_er[n]),
+        .gmii_rxd              (pcspma_gmii_rxd[n*XGMII_DATA_WIDTH+:XGMII_DATA_WIDTH]),
+        .gmii_rx_dv            (pcspma_gmii_rx_dv[n]),
+        .gmii_rx_er            (pcspma_gmii_rx_er[n]),
+        .gmii_isolate          (),
+        // Management: Alternative to MDIO Interface
+        .configuration_vector  (pcspma_config_vector[n*5+:5]),
+        .an_adv_config_vector  (pcspma_an_config_vector[n*16+:16]),
+        .an_restart_config     (pcspma_reset_done[n]),
+        .an_interrupt          (),
+        // Speed Control
+        .speed_is_10_100       (pcspma_status_speed != 2'b10),
+        .speed_is_100          (pcspma_status_speed == 2'b01),
+        // General IO's
+        .status_vector         (pcspma_status_vector[n*16+:16]),
+        .reset                 (rst_625mhz_int),
+        .signal_detect         (1'b1)
+    );
+
+end endgenerate
 
 fpga_core #(
     // FW and board IDs
@@ -910,6 +959,8 @@ fpga_core #(
     .AXIL_APP_CTRL_ADDR_WIDTH(AXIL_APP_CTRL_ADDR_WIDTH),
 
     // Ethernet interface configuration
+    .XGMII_DATA_WIDTH(XGMII_DATA_WIDTH),
+    .XGMII_CTRL_WIDTH(XGMII_CTRL_WIDTH),
     .AXIS_ETH_DATA_WIDTH(AXIS_ETH_DATA_WIDTH),
     .AXIS_ETH_KEEP_WIDTH(AXIS_ETH_KEEP_WIDTH),
     .AXIS_ETH_SYNC_DATA_WIDTH(AXIS_ETH_SYNC_DATA_WIDTH),
@@ -1037,33 +1088,22 @@ core_inst (
     .status_error_uncor(status_error_uncor),
 
     /*
-     * Ethernet: SFP+
+     * Ethernet: 10/100/1000BASE-T SGMII
      */
-    .sfp0_tx_clk(sfp0_tx_clk_int),
-    .sfp0_tx_rst(sfp0_tx_rst_int),
-    .sfp0_txd(sfp0_txd_int),
-    .sfp0_txc(sfp0_txc_int),
-    .sfp0_tx_prbs31_enable(sfp0_tx_prbs31_enable_int),
-    .sfp0_rx_clk(sfp0_rx_clk_int),
-    .sfp0_rx_rst(sfp0_rx_rst_int),
-    .sfp0_rxd(sfp0_rxd_int),
-    .sfp0_rxc(sfp0_rxc_int),
-    .sfp0_rx_prbs31_enable(sfp0_rx_prbs31_enable_int),
-    .sfp0_rx_error_count(sfp0_rx_error_count_int),
-    .sfp0_tx_disable_b(sfp0_tx_disable_b),
 
-    .sfp1_tx_clk(sfp1_tx_clk_int),
-    .sfp1_tx_rst(sfp1_tx_rst_int),
-    .sfp1_txd(sfp1_txd_int),
-    .sfp1_txc(sfp1_txc_int),
-    .sfp1_tx_prbs31_enable(sfp1_tx_prbs31_enable_int),
-    .sfp1_rx_clk(sfp1_rx_clk_int),
-    .sfp1_rx_rst(sfp1_rx_rst_int),
-    .sfp1_rxd(sfp1_rxd_int),
-    .sfp1_rxc(sfp1_rxc_int),
-    .sfp1_rx_prbs31_enable(sfp1_rx_prbs31_enable_int),
-    .sfp1_rx_error_count(sfp1_rx_error_count_int),
-    .sfp1_tx_disable_b(sfp1_tx_disable_b)
+    .sfp0_tx_disable_b(sfp0_tx_disable_b),
+    .sfp1_tx_disable_b(sfp1_tx_disable_b),
+    .phy_gmii_clk_en(pcspma_gmii_clk_en),
+    .phy_gmii_rxclk(pcspma_gmii_rxclk),
+    .phy_gmii_rxrst(pcspma_gmii_rxrst),
+    .phy_gmii_rxd(pcspma_gmii_rxd),
+    .phy_gmii_rx_dv(pcspma_gmii_rx_dv),
+    .phy_gmii_rx_er(pcspma_gmii_rx_er),
+    .phy_gmii_txclk(pcspma_gmii_txclk),
+    .phy_gmii_txrst(pcspma_gmii_txrst),
+    .phy_gmii_txd(pcspma_gmii_txd),
+    .phy_gmii_tx_en(pcspma_gmii_tx_en),
+    .phy_gmii_tx_er(pcspma_gmii_tx_er)
 );
 
 endmodule
