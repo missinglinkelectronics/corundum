@@ -41,20 +41,12 @@ SYN_FILES += rtl/common/tx_scheduler_rr.v
 SYN_FILES += rtl/common/tdma_scheduler.v
 SYN_FILES += rtl/common/tdma_ber.v
 SYN_FILES += rtl/common/tdma_ber_ch.v
-SYN_FILES += lib/eth/rtl/eth_mac_10g.v
-SYN_FILES += lib/eth/rtl/axis_xgmii_rx_64.v
-SYN_FILES += lib/eth/rtl/axis_xgmii_tx_64.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_rx.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_rx_if.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_rx_frame_sync.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_rx_ber_mon.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_rx_watchdog.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_tx.v
-SYN_FILES += lib/eth/rtl/eth_phy_10g_tx_if.v
-SYN_FILES += lib/eth/rtl/xgmii_baser_dec_64.v
-SYN_FILES += lib/eth/rtl/xgmii_baser_enc_64.v
+SYN_FILES += lib/eth/rtl/eth_mac_1g.v
+SYN_FILES += lib/eth/rtl/axis_gmii_rx.v
+SYN_FILES += lib/eth/rtl/axis_gmii_tx.v
 SYN_FILES += lib/eth/rtl/lfsr.v
+SYN_FILES += lib/eth/rtl/eth_axis_rx.v
+SYN_FILES += lib/eth/rtl/eth_axis_tx.v
 SYN_FILES += lib/eth/rtl/ptp_clock.v
 SYN_FILES += lib/eth/rtl/ptp_clock_cdc.v
 SYN_FILES += lib/eth/rtl/ptp_perout.v
@@ -113,7 +105,7 @@ XDC_FILES += ../../../common/syn/vivado/tdma_ber_ch.tcl
 
 # IP
 IP_TCL_FILES = ip/pcie4_uscale_plus_0.tcl
-IP_TCL_FILES += ip/eth_xcvr_gt.tcl
+IP_TCL_FILES += ip/gig_ethernet_pcs_pma_0.tcl
 
 # Configuration
 CONFIG_TCL_FILES = ./config.tcl
