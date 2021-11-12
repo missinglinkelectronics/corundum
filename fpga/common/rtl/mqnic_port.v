@@ -418,6 +418,12 @@ wire                                 tx_fifo_desc_tlast;
 wire [DESC_REQ_TAG_WIDTH_INT-1:0]    tx_fifo_desc_tid;
 wire                                 tx_fifo_desc_tuser;
 
+wire [DMA_CLIENT_LEN_WIDTH-1:0]      tx_desc_status_len;
+wire [QUEUE_INDEX_WIDTH-1:0]         tx_desc_status_queue;
+wire [DESC_REQ_TAG_WIDTH_INT-1:0]    tx_desc_status_tag;
+wire                                 tx_desc_status_last;
+wire                                 tx_desc_status_valid;
+
 wire [0:0]                           rx_cpl_req_sel = 1'b1;
 wire [QUEUE_INDEX_WIDTH-1:0]         rx_cpl_req_queue;
 wire [DESC_REQ_TAG_WIDTH_INT-1:0]    rx_cpl_req_tag;
@@ -804,6 +810,15 @@ scheduler_block (
     .s_axis_tx_req_status_valid(tx_req_status_valid),
 
     /*
+     * Descriptor status input
+     */
+    .s_axis_desc_status_len(tx_desc_status_len),
+    .s_axis_desc_status_queue(tx_desc_status_queue),
+    .s_axis_desc_status_tag(tx_desc_status_tag),
+    .s_axis_desc_status_last(tx_desc_status_last),
+    .s_axis_desc_status_valid(tx_desc_status_valid),
+
+    /*
      * Doorbell input
      */
     .s_axis_doorbell_queue(s_axis_tx_doorbell_queue),
@@ -933,6 +948,15 @@ tx_engine_inst (
     .s_axis_desc_tlast(tx_fifo_desc_tlast),
     .s_axis_desc_tid(tx_fifo_desc_tid),
     .s_axis_desc_tuser(tx_fifo_desc_tuser),
+
+    /*
+     * Descriptor status output
+     */
+    .m_axis_desc_status_len(tx_desc_status_len),
+    .m_axis_desc_status_queue(tx_desc_status_queue),
+    .m_axis_desc_status_tag(tx_desc_status_tag),
+    .m_axis_desc_status_last(tx_desc_status_last),
+    .m_axis_desc_status_valid(tx_desc_status_valid),
 
     /*
      * Completion request output

@@ -145,6 +145,15 @@ module tx_engine #
     input  wire                             s_axis_desc_tuser,
 
     /*
+     * Descriptor status output
+     */
+    output wire [DMA_CLIENT_LEN_WIDTH-1:0]  m_axis_desc_status_len,
+    output wire [QUEUE_INDEX_WIDTH-1:0]     m_axis_desc_status_queue,
+    output wire [DESC_REQ_TAG_WIDTH-1:0]    m_axis_desc_status_tag,
+    output wire                             m_axis_desc_status_last,
+    output wire                             m_axis_desc_status_valid,
+
+    /*
      * Completion request output
      */
     output wire [QUEUE_INDEX_WIDTH-1:0]     m_axis_cpl_req_queue,
@@ -384,6 +393,12 @@ reg desc_table_read_start_en;
 reg [CL_DESC_TABLE_SIZE+1-1:0] desc_table_read_finish_ptr;
 reg desc_table_read_finish_en;
 
+reg [DMA_CLIENT_LEN_WIDTH-1:0] m_axis_desc_status_len_reg = {DMA_CLIENT_LEN_WIDTH{1'b0}}, m_axis_desc_status_len_next;
+reg [QUEUE_INDEX_WIDTH-1:0] m_axis_desc_status_queue_reg = {QUEUE_INDEX_WIDTH{1'b0}}, m_axis_desc_status_queue_next;
+reg [DESC_REQ_TAG_WIDTH-1:0] m_axis_desc_status_tag_reg = {DESC_REQ_TAG_WIDTH{1'b0}}, m_axis_desc_status_tag_next;
+reg m_axis_desc_status_last_reg = 1'b0, m_axis_desc_status_last_next;
+reg m_axis_desc_status_valid_reg = 1'b0, m_axis_desc_status_valid_next;
+
 assign s_axis_tx_req_ready = s_axis_tx_req_ready_reg;
 
 assign m_axis_tx_req_status_len = m_axis_tx_req_status_len_reg;
@@ -419,6 +434,12 @@ assign m_axis_tx_csum_cmd_csum_offset = m_axis_tx_csum_cmd_csum_offset_reg;
 assign m_axis_tx_csum_cmd_valid = m_axis_tx_csum_cmd_valid_reg;
 
 assign s_axis_tx_ptp_ts_ready = s_axis_tx_ptp_ts_ready_reg;
+
+assign m_axis_desc_status_len = m_axis_desc_status_len_reg;
+assign m_axis_desc_status_queue = m_axis_desc_status_queue_reg;
+assign m_axis_desc_status_tag = m_axis_desc_status_tag_reg;
+assign m_axis_desc_status_last = m_axis_desc_status_last_reg;
+assign m_axis_desc_status_valid = m_axis_desc_status_valid_reg;
 
 // reg [15:0] stall_cnt = 0;
 // wire stalled = stall_cnt[12];
@@ -571,12 +592,18 @@ always @* begin
     desc_table_read_finish_ptr = s_axis_dma_read_desc_status_tag;
     desc_table_read_finish_en = 1'b0;
 
+    m_axis_desc_status_valid_next = 1'b0;
+    m_axis_desc_status_last_next = 1'b0;
+    m_axis_desc_status_len_next = m_axis_desc_status_len_reg;
+    m_axis_desc_status_queue_next = m_axis_desc_status_queue_reg;
+    m_axis_desc_status_tag_next = m_axis_desc_status_tag_reg;
+
     // descriptor fetch
     // wait for transmit request
     s_axis_tx_req_ready_next = enable && active_desc_req_count_reg < MAX_DESC_REQ && !desc_table_active[desc_table_start_ptr_reg & DESC_PTR_MASK] && ($unsigned(desc_table_start_ptr_reg - desc_table_finish_ptr_reg) < DESC_TABLE_SIZE) && (!m_axis_desc_req_valid || m_axis_desc_req_ready);
     if (s_axis_tx_req_ready && s_axis_tx_req_valid) begin
         s_axis_tx_req_ready_next = 1'b0;
- 
+
         // store in descriptor table
         desc_table_start_tag = s_axis_tx_req_tag;
         desc_table_start_queue = s_axis_tx_req_queue;
@@ -661,6 +688,12 @@ always @* begin
                 s_axis_desc_tready_next = 1'b0;
             end
 
+            // descriptor early length report
+            m_axis_desc_status_valid_next = 1'b1;
+            m_axis_desc_status_len_next = s_axis_desc_tdata[63:32];
+            m_axis_desc_status_queue_next = desc_table_queue[s_axis_desc_tid & DESC_PTR_MASK];
+            m_axis_desc_status_tag_next = desc_table_tag[s_axis_desc_tid & DESC_PTR_MASK];
+
             if (s_axis_desc_tlast) begin
                 // update entry in descriptor table
                 desc_table_desc_fetched_ptr = s_axis_desc_tid & DESC_PTR_MASK;
@@ -681,6 +714,8 @@ always @* begin
 
                 desc_start_next = 1'b1;
                 desc_len_next = 0;
+
+                m_axis_desc_status_last_next = 1'b1;
             end
         end
     end
@@ -869,6 +904,12 @@ always @(posedge clk) begin
     finish_tx_req_status_len_reg <= finish_tx_req_status_len_next;
     finish_tx_req_status_tag_reg <= finish_tx_req_status_tag_next;
     finish_tx_req_status_valid_reg <= finish_tx_req_status_valid_next;
+
+    m_axis_desc_status_valid_reg <= m_axis_desc_status_valid_next;
+    m_axis_desc_status_len_reg <= m_axis_desc_status_len_next;
+    m_axis_desc_status_queue_reg <= m_axis_desc_status_queue_next;
+    m_axis_desc_status_tag_reg <= m_axis_desc_status_tag_next;
+    m_axis_desc_status_last_reg <= m_axis_desc_status_last_next;
 
     active_desc_req_count_reg <= active_desc_req_count_reg + inc_active_desc_req - dec_active_desc_req_1 - dec_active_desc_req_2;
 

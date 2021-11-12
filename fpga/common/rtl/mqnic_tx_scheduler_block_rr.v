@@ -131,6 +131,15 @@ module mqnic_tx_scheduler_block #
     input  wire                          s_axis_tx_req_status_valid,
 
     /*
+     * Descriptor status input
+     */
+    input wire [LEN_WIDTH-1:0]           s_axis_desc_status_len,
+    input wire [QUEUE_INDEX_WIDTH-1:0]   s_axis_desc_status_queue,
+    input wire [REQ_TAG_WIDTH-1:0]       s_axis_desc_status_tag,
+    input wire                           s_axis_desc_status_last,
+    input wire                           s_axis_desc_status_valid,
+
+    /*
      * TX doorbell input
      */
     input  wire [QUEUE_INDEX_WIDTH-1:0]  s_axis_doorbell_queue,
