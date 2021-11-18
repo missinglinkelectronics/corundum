@@ -112,6 +112,10 @@ initial begin
         $error("Error: AXI stream interface requires byte (8-bit) granularity (instance %m)");
         $finish;
     end
+    if (DATA_WIDTH < 32) begin
+        $error("Error: AXI stream interface must be at least 32 bits wide (instance %m)");
+        $finish;
+    end
 end
 
 reg transfer_in_reg = 1'b0;

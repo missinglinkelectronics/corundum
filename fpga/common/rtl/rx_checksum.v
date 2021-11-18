@@ -77,6 +77,10 @@ initial begin
         $error("Error: AXI stream interface requires byte (8-bit) granularity (instance %m)");
         $finish;
     end
+    if (DATA_WIDTH < 32) begin
+        $error("Error: AXI stream interface must be at least 32 bits wide (instance %m)");
+        $finish;
+    end
 end
 
 reg [OFFSET_WIDTH-1:0] offset_reg = START_OFFSET/KEEP_WIDTH;
