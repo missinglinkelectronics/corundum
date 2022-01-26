@@ -770,6 +770,8 @@ always @(posedge clk) begin
         s_axis_read_desc_ready_reg <= 1'b0;
         m_axis_read_desc_status_valid_reg <= 1'b0;
 
+        op_table_start_ptr_reg <= 0;
+        op_table_finish_ptr_reg <= 0;
         status_fifo_wr_ptr_reg <= 0;
         status_fifo_rd_ptr_reg <= 0;
         status_fifo_we_reg <= 1'b0;
