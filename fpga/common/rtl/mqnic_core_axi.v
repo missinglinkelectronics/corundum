@@ -130,7 +130,7 @@ module mqnic_core_axi #
     parameter DMA_TAG_WIDTH = 16,
     parameter RAM_PIPELINE = 2,
     parameter AXI_DMA_MAX_BURST_LEN = 256,
-    parameter AXI_DMA_USE_ID = 1,
+    parameter AXI_DMA_USE_ID = 0,
     parameter AXI_DMA_READ_OP_TABLE_SIZE = 2**(AXI_ID_WIDTH),
     parameter AXI_DMA_WRITE_OP_TABLE_SIZE = 2**(AXI_ID_WIDTH),
 
