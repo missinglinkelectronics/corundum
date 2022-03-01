@@ -1,0 +1,25 @@
+[options]
+mode bmc
+depth 9
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog  axil_crossbar_wr.v
+read_verilog  axil_crossbar_wr_patched.v
+read_verilog  axil_register_wr.v
+read_verilog  arbiter.v
+read_verilog  axil_crossbar_addr.v
+read_verilog  priority_encoder.v
+read_verilog -formal -sv axil_crossbar_wr_tb.sv
+prep -top axil_crossbar_wr_tb -nordff
+
+[files]
+axil_crossbar_wr.v
+axil_crossbar_wr_patched.v
+axil_register_wr.v
+arbiter.v
+axil_crossbar_wr_tb.sv
+axil_crossbar_addr.v
+priority_encoder.v

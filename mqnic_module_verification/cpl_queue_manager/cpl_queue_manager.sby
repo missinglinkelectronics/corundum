@@ -1,0 +1,17 @@
+[options]
+mode bmc
+depth 9
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog  cpl_queue_manager.v
+read_verilog  cpl_queue_manager_patched.v
+read_verilog -formal -sv cpl_queue_manager_tb.sv
+prep -top cpl_queue_manager_tb -nordff
+
+[files]
+cpl_queue_manager.v
+cpl_queue_manager_patched.v
+cpl_queue_manager_tb.sv

@@ -1,0 +1,17 @@
+[options]
+mode bmc
+depth 14
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog  dma_ram_demux_rd.v
+read_verilog  dma_ram_demux_rd_patched.v
+read_verilog -formal -sv dma_ram_demux_rd_tb.sv
+prep -top dma_ram_demux_rd_tb -nordff
+
+[files]
+dma_ram_demux_rd.v
+dma_ram_demux_rd_patched.v
+dma_ram_demux_rd_tb.sv
