@@ -891,11 +891,11 @@ reg ctrl_reg_wr_ack_reg = 1'b0;
 reg [AXIL_DATA_WIDTH-1:0] ctrl_reg_rd_data_reg = {AXIL_DATA_WIDTH{1'b0}};
 reg ctrl_reg_rd_ack_reg = 1'b0;
 
-wire port_ctrl_reg_wr_wait[PORTS-1:0];
-wire port_ctrl_reg_wr_ack[PORTS-1:0];
-wire [AXIL_DATA_WIDTH-1:0] port_ctrl_reg_rd_data[PORTS-1:0];
-wire port_ctrl_reg_rd_wait[PORTS-1:0];
-wire port_ctrl_reg_rd_ack[PORTS-1:0];
+wire sched_ctrl_reg_wr_wait[SCHEDULERS-1:0];
+wire sched_ctrl_reg_wr_ack[SCHEDULERS-1:0];
+wire [AXIL_DATA_WIDTH-1:0] sched_ctrl_reg_rd_data[SCHEDULERS-1:0];
+wire sched_ctrl_reg_rd_wait[SCHEDULERS-1:0];
+wire sched_ctrl_reg_rd_ack[SCHEDULERS-1:0];
 
 reg ctrl_reg_wr_wait_cmb;
 reg ctrl_reg_wr_ack_cmb;
@@ -918,12 +918,12 @@ always @* begin
     ctrl_reg_rd_wait_cmb = 1'b0;
     ctrl_reg_rd_ack_cmb = ctrl_reg_rd_ack_reg;
 
-    for (k = 0; k < PORTS; k = k + 1) begin
-        ctrl_reg_wr_wait_cmb = ctrl_reg_wr_wait_cmb | port_ctrl_reg_wr_wait[k];
-        ctrl_reg_wr_ack_cmb = ctrl_reg_wr_ack_cmb | port_ctrl_reg_wr_ack[k];
-        ctrl_reg_rd_data_cmb = ctrl_reg_rd_data_cmb | port_ctrl_reg_rd_data[k];
-        ctrl_reg_rd_wait_cmb = ctrl_reg_rd_wait_cmb | port_ctrl_reg_rd_wait[k];
-        ctrl_reg_rd_ack_cmb = ctrl_reg_rd_ack_cmb | port_ctrl_reg_rd_ack[k];
+    for (k = 0; k < SCHEDULERS; k = k + 1) begin
+        ctrl_reg_wr_wait_cmb = ctrl_reg_wr_wait_cmb | sched_ctrl_reg_wr_wait[k];
+        ctrl_reg_wr_ack_cmb = ctrl_reg_wr_ack_cmb | sched_ctrl_reg_wr_ack[k];
+        ctrl_reg_rd_data_cmb = ctrl_reg_rd_data_cmb | sched_ctrl_reg_rd_data[k];
+        ctrl_reg_rd_wait_cmb = ctrl_reg_rd_wait_cmb | sched_ctrl_reg_rd_wait[k];
+        ctrl_reg_rd_ack_cmb = ctrl_reg_rd_ack_cmb | sched_ctrl_reg_rd_ack[k];
     end
 end
 
@@ -2005,7 +2005,7 @@ generate
 
 genvar n;
 
-for (n = 0; n < SCHEDULERS; n = n + 1) begin : port
+for (n = 0; n < SCHEDULERS; n = n + 1) begin : scheduler
 
     mqnic_tx_scheduler_block #(
         .PORTS(PORTS),
@@ -2040,13 +2040,13 @@ for (n = 0; n < SCHEDULERS; n = n + 1) begin : port
         .ctrl_reg_wr_data(ctrl_reg_wr_data),
         .ctrl_reg_wr_strb(ctrl_reg_wr_strb),
         .ctrl_reg_wr_en(ctrl_reg_wr_en),
-        .ctrl_reg_wr_wait(port_ctrl_reg_wr_wait[n]),
-        .ctrl_reg_wr_ack(port_ctrl_reg_wr_ack[n]),
+        .ctrl_reg_wr_wait(sched_ctrl_reg_wr_wait[n]),
+        .ctrl_reg_wr_ack(sched_ctrl_reg_wr_ack[n]),
         .ctrl_reg_rd_addr(ctrl_reg_rd_addr),
         .ctrl_reg_rd_en(ctrl_reg_rd_en),
-        .ctrl_reg_rd_data(port_ctrl_reg_rd_data[n]),
-        .ctrl_reg_rd_wait(port_ctrl_reg_rd_wait[n]),
-        .ctrl_reg_rd_ack(port_ctrl_reg_rd_ack[n]),
+        .ctrl_reg_rd_data(sched_ctrl_reg_rd_data[n]),
+        .ctrl_reg_rd_wait(sched_ctrl_reg_rd_wait[n]),
+        .ctrl_reg_rd_ack(sched_ctrl_reg_rd_ack[n]),
 
         /*
          * AXI-Lite slave interface
