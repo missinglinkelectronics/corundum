@@ -304,6 +304,7 @@ module fpga_core #
     input  wire [7:0]                         sfp0_rxc,
     output wire                               sfp0_rx_prbs31_enable,
     input  wire [6:0]                         sfp0_rx_error_count,
+    input  wire                               sfp0_rx_block_lock,
     output wire                               sfp0_tx_disable_b,
 
     input  wire                               sfp1_tx_clk,
@@ -317,6 +318,7 @@ module fpga_core #
     input  wire [7:0]                         sfp1_rxc,
     output wire                               sfp1_rx_prbs31_enable,
     input  wire [6:0]                         sfp1_rx_error_count,
+    input  wire                               sfp1_rx_block_lock,
     output wire                               sfp1_tx_disable_b,
 
     input  wire                               sfp_drp_clk,
@@ -621,6 +623,7 @@ wire [PORT_COUNT-1:0]                         axis_eth_tx_ptp_ts_ready;
 
 wire [PORT_COUNT-1:0]                         eth_rx_clk;
 wire [PORT_COUNT-1:0]                         eth_rx_rst;
+wire [PORT_COUNT-1:0]                         eth_rx_block_lock;
 
 wire [PORT_COUNT*PTP_TS_WIDTH-1:0]            eth_rx_ptp_ts_96;
 wire [PORT_COUNT-1:0]                         eth_rx_ptp_ts_step;
@@ -642,6 +645,8 @@ wire [PORT_COUNT-1:0]                   port_xgmii_rx_rst;
 wire [PORT_COUNT*XGMII_DATA_WIDTH-1:0]  port_xgmii_rxd;
 wire [PORT_COUNT*XGMII_CTRL_WIDTH-1:0]  port_xgmii_rxc;
 
+wire [PORT_COUNT-1:0]                   port_rx_block_lock;
+
 //  counts
 // IF  PORT   SFP0     SFP1
 // 1   1      0 (0.0)
@@ -662,6 +667,8 @@ generate
         assign port_xgmii_rxd[SFP0_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH] = sfp0_rxd;
         assign port_xgmii_rxc[SFP0_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH] = sfp0_rxc;
 
+        assign port_rx_block_lock[SFP0_IND] = sfp0_rx_block_lock;
+
         assign sfp0_txd = port_xgmii_txd[SFP0_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH];
         assign sfp0_txc = port_xgmii_txc[SFP0_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH];
     end else begin
@@ -677,6 +684,8 @@ generate
         assign port_xgmii_rxd[SFP1_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH] = sfp1_rxd;
         assign port_xgmii_rxc[SFP1_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH] = sfp1_rxc;
 
+        assign port_rx_block_lock[SFP1_IND] = sfp1_rx_block_lock;
+
         assign sfp1_txd = port_xgmii_txd[SFP1_IND*XGMII_DATA_WIDTH +: XGMII_DATA_WIDTH];
         assign sfp1_txc = port_xgmii_txc[SFP1_IND*XGMII_CTRL_WIDTH +: XGMII_CTRL_WIDTH];
     end else begin
@@ -690,6 +699,8 @@ generate
         assign eth_tx_rst[n] = port_xgmii_tx_rst[n];
         assign eth_rx_clk[n] = port_xgmii_rx_clk[n];
         assign eth_rx_rst[n] = port_xgmii_rx_rst[n];
+
+        assign eth_rx_block_lock[n] = port_rx_block_lock[n];
 
         eth_mac_10g #(
             .DATA_WIDTH(AXIS_ETH_DATA_WIDTH),
@@ -1075,7 +1086,7 @@ core_inst (
 
     .eth_rx_clk(eth_rx_clk),
     .eth_rx_rst(eth_rx_rst),
-    .eth_rx_block_lock({PORT_COUNT{1'b1}}),
+    .eth_rx_block_lock(eth_rx_block_lock),
 
     .eth_rx_ptp_clk(0),
     .eth_rx_ptp_rst(0),

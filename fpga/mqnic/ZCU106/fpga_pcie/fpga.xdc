@@ -92,6 +92,15 @@ set_property -dict {LOC U9  } [get_ports sfp_mgt_refclk_0_n] ;# MGTREFCLK1N_226 
 set_property -dict {LOC AE22 IOSTANDARD LVCMOS12 SLEW SLOW DRIVE 8} [get_ports sfp0_tx_disable_b]
 set_property -dict {LOC AF20 IOSTANDARD LVCMOS12 SLEW SLOW DRIVE 8} [get_ports sfp1_tx_disable_b]
 
+set_max_delay -datapath_only \
+	-from [get_cells -hier -filter {NAME=~*sync_signal_rx_block_lock/sync_reg_reg[0][0]}] \
+	-to [get_cells -hier -filter {NAME=~*sync_signal_rx_block_lock/sync_reg_reg[1][0]}] \
+	4.0
+set_max_delay -datapath_only \
+	-from [get_cells -hier -filter {NAME=~*sync_signal_rx_block_lock/sync_reg_reg[0][1]}] \
+	-to [get_cells -hier -filter {NAME=~*sync_signal_rx_block_lock/sync_reg_reg[1][1]}] \
+	4.0
+
 # 156.25 MHz MGT reference clock
 create_clock -period 6.400 -name sfp_mgt_refclk_0 [get_ports sfp_mgt_refclk_0_p]
 

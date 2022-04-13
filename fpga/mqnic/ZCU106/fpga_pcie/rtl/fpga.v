@@ -713,6 +713,9 @@ wire        sfp_drp_rdy;
 wire sfp0_rx_block_lock;
 wire sfp1_rx_block_lock;
 
+wire sfp0_rx_block_lock_sync;
+wire sfp1_rx_block_lock_sync;
+
 wire sfp_gtpowergood;
 
 wire sfp_mgt_refclk_0;
@@ -746,6 +749,16 @@ sfp_sync_reset_inst (
     .clk(sfp_mgt_refclk_0_bufg),
     .rst(rst_125mhz_int),
     .out(sfp_rst)
+);
+
+sync_signal #(
+    .WIDTH(2),
+    .N(2)
+)
+sync_signal_rx_block_lock (
+    .clk(pcie_user_clk),
+    .in({sfp1_rx_block_lock, sfp0_rx_block_lock}),
+    .out({sfp1_rx_block_lock_sync, sfp0_rx_block_lock_sync})
 );
 
 eth_xcvr_phy_10g_gty_quad_wrapper #(
@@ -1077,6 +1090,7 @@ core_inst (
     .sfp0_rxc(sfp0_rxc_int),
     .sfp0_rx_prbs31_enable(sfp0_rx_prbs31_enable_int),
     .sfp0_rx_error_count(sfp0_rx_error_count_int),
+    .sfp0_rx_block_lock(sfp0_rx_block_lock_sync),
     .sfp0_tx_disable_b(sfp0_tx_disable_b),
 
     .sfp1_tx_clk(sfp1_tx_clk_int),
@@ -1090,6 +1104,7 @@ core_inst (
     .sfp1_rxc(sfp1_rxc_int),
     .sfp1_rx_prbs31_enable(sfp1_rx_prbs31_enable_int),
     .sfp1_rx_error_count(sfp1_rx_error_count_int),
+    .sfp1_rx_block_lock(sfp1_rx_block_lock_sync),
     .sfp1_tx_disable_b(sfp1_tx_disable_b),
 
     .sfp_drp_clk(sfp_drp_clk),
