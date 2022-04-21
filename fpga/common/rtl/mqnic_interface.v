@@ -421,6 +421,9 @@ localparam RBB = RB_BASE_ADDR & {AXIL_CTRL_ADDR_WIDTH{1'b1}};
 localparam SCHED_RB_BASE_ADDR = RB_BASE_ADDR + 16'h1000;
 localparam SCHED_RB_STRIDE = 16'h1000;
 
+localparam PORT_RB_BASE_ADDR = SCHED_RB_BASE_ADDR + SCHED_RB_STRIDE*SCHEDULERS;
+localparam PORT_RB_STRIDE = 16'h1000;
+
 // parameter sizing helpers
 function [31:0] w_32(input [31:0] val);
     w_32 = val;
@@ -897,6 +900,12 @@ wire [AXIL_DATA_WIDTH-1:0] sched_ctrl_reg_rd_data[SCHEDULERS-1:0];
 wire sched_ctrl_reg_rd_wait[SCHEDULERS-1:0];
 wire sched_ctrl_reg_rd_ack[SCHEDULERS-1:0];
 
+wire port_ctrl_reg_wr_wait[PORTS-1:0];
+wire port_ctrl_reg_wr_ack[PORTS-1:0];
+wire [AXIL_DATA_WIDTH-1:0] port_ctrl_reg_rd_data[PORTS-1:0];
+wire port_ctrl_reg_rd_wait[PORTS-1:0];
+wire port_ctrl_reg_rd_ack[PORTS-1:0];
+
 reg ctrl_reg_wr_wait_cmb;
 reg ctrl_reg_wr_ack_cmb;
 reg [AXIL_DATA_WIDTH-1:0] ctrl_reg_rd_data_cmb;
@@ -924,6 +933,14 @@ always @* begin
         ctrl_reg_rd_data_cmb = ctrl_reg_rd_data_cmb | sched_ctrl_reg_rd_data[k];
         ctrl_reg_rd_wait_cmb = ctrl_reg_rd_wait_cmb | sched_ctrl_reg_rd_wait[k];
         ctrl_reg_rd_ack_cmb = ctrl_reg_rd_ack_cmb | sched_ctrl_reg_rd_ack[k];
+    end
+
+    for (k = 0; k < PORTS; k = k + 1) begin
+        ctrl_reg_wr_wait_cmb = ctrl_reg_wr_wait_cmb | port_ctrl_reg_wr_wait[k];
+        ctrl_reg_wr_ack_cmb = ctrl_reg_wr_ack_cmb | port_ctrl_reg_wr_ack[k];
+        ctrl_reg_rd_data_cmb = ctrl_reg_rd_data_cmb | port_ctrl_reg_rd_data[k];
+        ctrl_reg_rd_wait_cmb = ctrl_reg_rd_wait_cmb | port_ctrl_reg_rd_wait[k];
+        ctrl_reg_rd_ack_cmb = ctrl_reg_rd_ack_cmb | port_ctrl_reg_rd_ack[k];
     end
 end
 
@@ -2003,7 +2020,7 @@ wire                             tx_req_status_valid;
 
 generate
 
-genvar n;
+genvar n, m;
 
 for (n = 0; n < SCHEDULERS; n = n + 1) begin : scheduler
 
@@ -2014,7 +2031,7 @@ for (n = 0; n < SCHEDULERS; n = n + 1) begin : scheduler
         .REG_DATA_WIDTH(AXIL_DATA_WIDTH),
         .REG_STRB_WIDTH(AXIL_STRB_WIDTH),
         .RB_BASE_ADDR(SCHED_RB_BASE_ADDR + SCHED_RB_STRIDE*n),
-        .RB_NEXT_PTR(n < SCHEDULERS-1 ? SCHED_RB_BASE_ADDR + SCHED_RB_STRIDE*(n+1) : 0),
+        .RB_NEXT_PTR(n < SCHEDULERS-1 ? SCHED_RB_BASE_ADDR + SCHED_RB_STRIDE*(n+1) : PORT_RB_BASE_ADDR),
         .AXIL_DATA_WIDTH(AXIL_DATA_WIDTH),
         .AXIL_ADDR_WIDTH(AXIL_SCHED_ADDR_WIDTH),
         .AXIL_STRB_WIDTH(AXIL_STRB_WIDTH),
@@ -2171,6 +2188,36 @@ end else begin
     assign tx_sched_req_status_len = tx_req_status_len;
     assign tx_sched_req_status_tag = tx_req_status_tag;
     assign tx_sched_req_status_valid = tx_req_status_valid;
+
+end
+
+for (m = 0; m < PORTS; m = m + 1) begin : ports
+
+    mqnic_port_csr #(
+        .REG_ADDR_WIDTH(AXIL_CTRL_ADDR_WIDTH),
+        .REG_DATA_WIDTH(AXIL_DATA_WIDTH),
+        .REG_STRB_WIDTH(AXIL_STRB_WIDTH),
+        .RB_BASE_ADDR(PORT_RB_BASE_ADDR + PORT_RB_STRIDE*m),
+        .RB_NEXT_PTR(m < PORTS-1 ? PORT_RB_BASE_ADDR + PORT_RB_STRIDE*(m+1) : 0)
+    ) port_csr (
+        .clk(clk),
+        .rst(rst),
+
+        /*
+         * Control register interface
+         */
+        .ctrl_reg_wr_addr(ctrl_reg_wr_addr),
+        .ctrl_reg_wr_data(ctrl_reg_wr_data),
+        .ctrl_reg_wr_strb(ctrl_reg_wr_strb),
+        .ctrl_reg_wr_en(ctrl_reg_wr_en),
+        .ctrl_reg_wr_wait(port_ctrl_reg_wr_wait[m]),
+        .ctrl_reg_wr_ack(port_ctrl_reg_wr_ack[m]),
+        .ctrl_reg_rd_addr(ctrl_reg_rd_addr),
+        .ctrl_reg_rd_en(ctrl_reg_rd_en),
+        .ctrl_reg_rd_data(port_ctrl_reg_rd_data[m]),
+        .ctrl_reg_rd_wait(port_ctrl_reg_rd_wait[m]),
+        .ctrl_reg_rd_ack(port_ctrl_reg_rd_ack[m])
+    );
 
 end
 

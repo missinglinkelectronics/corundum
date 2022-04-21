@@ -15,6 +15,7 @@ SYN_FILES += rtl/common/mqnic_core.v
 SYN_FILES += rtl/common/mqnic_interface.v
 SYN_FILES += rtl/common/mqnic_interface_tx.v
 SYN_FILES += rtl/common/mqnic_interface_rx.v
+SYN_FILES += rtl/common/mqnic_port_csr.v
 SYN_FILES += rtl/common/mqnic_egress.v
 SYN_FILES += rtl/common/mqnic_ingress.v
 SYN_FILES += rtl/common/mqnic_l2_egress.v
