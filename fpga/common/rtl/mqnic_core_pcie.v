@@ -360,6 +360,7 @@ module mqnic_core_pcie #
 
     input  wire [PORT_COUNT-1:0]                         rx_clk,
     input  wire [PORT_COUNT-1:0]                         rx_rst,
+    input  wire [PORT_COUNT-1:0]                         rx_block_lock,
 
     input  wire [PORT_COUNT-1:0]                         rx_ptp_clk,
     input  wire [PORT_COUNT-1:0]                         rx_ptp_rst,
@@ -1628,6 +1629,7 @@ core_inst (
 
     .rx_clk(rx_clk),
     .rx_rst(rx_rst),
+    .rx_block_lock(rx_block_lock),
 
     .rx_ptp_clk(rx_ptp_clk),
     .rx_ptp_rst(rx_ptp_rst),

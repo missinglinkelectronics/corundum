@@ -357,6 +357,7 @@ module mqnic_core #
 
     input  wire [PORT_COUNT-1:0]                        rx_clk,
     input  wire [PORT_COUNT-1:0]                        rx_rst,
+    input  wire [PORT_COUNT-1:0]                        rx_block_lock,
 
     input  wire [PORT_COUNT-1:0]                        rx_ptp_clk,
     input  wire [PORT_COUNT-1:0]                        rx_ptp_rst,
@@ -2419,6 +2420,11 @@ generate
              */
             .ptp_ts_96(ptp_ts_96),
             .ptp_ts_step(ptp_ts_step),
+
+             /*
+             * Ethernet status
+             */
+            .rx_block_lock(rx_block_lock[n*PORTS_PER_IF+:PORTS_PER_IF]),
 
             /*
              * MSI interrupts

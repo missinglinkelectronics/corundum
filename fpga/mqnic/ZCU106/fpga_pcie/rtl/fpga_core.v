@@ -1075,6 +1075,7 @@ core_inst (
 
     .eth_rx_clk(eth_rx_clk),
     .eth_rx_rst(eth_rx_rst),
+    .eth_rx_block_lock({PORT_COUNT{1'b1}}),
 
     .eth_rx_ptp_clk(0),
     .eth_rx_ptp_rst(0),

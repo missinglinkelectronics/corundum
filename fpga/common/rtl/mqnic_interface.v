@@ -363,6 +363,11 @@ module mqnic_interface #
     input  wire [95:0]                         ptp_ts_96,
     input  wire                                ptp_ts_step,
 
+     /*
+     * Ethernet status
+     */
+    input  wire [PORTS-1:0]                    rx_block_lock,
+
     /*
      * MSI interrupts
      */
@@ -2202,6 +2207,11 @@ for (m = 0; m < PORTS; m = m + 1) begin : ports
     ) port_csr (
         .clk(clk),
         .rst(rst),
+
+        /*
+         * Ethernet status
+         */
+        .rx_block_lock(rx_block_lock[m]),
 
         /*
          * Control register interface

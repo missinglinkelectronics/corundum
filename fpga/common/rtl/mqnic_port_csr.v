@@ -58,6 +58,11 @@ module mqnic_port_csr #
     input  wire                          rst,
 
     /*
+     * Ethernet status
+     */
+    input  wire                          rx_block_lock,
+
+    /*
      * Control register interface
      */
     input  wire [REG_ADDR_WIDTH-1:0]     ctrl_reg_wr_addr,
@@ -106,8 +111,9 @@ always @(posedge clk) begin
         case (ctrl_reg_rd_addr_mod)
             // Port CSR
             RBB+8'h00: ctrl_reg_rd_data_reg <= 32'h0000C070;  // Type
-            RBB+8'h04: ctrl_reg_rd_data_reg <= 32'h00000000;  // Version
+            RBB+8'h04: ctrl_reg_rd_data_reg <= 32'h00000100;  // Version
             RBB+8'h08: ctrl_reg_rd_data_reg <= RB_NEXT_PTR;   // Next header
+            RBB+8'h0C: ctrl_reg_rd_data_reg <= rx_block_lock; // Link State
         endcase
     end
 
