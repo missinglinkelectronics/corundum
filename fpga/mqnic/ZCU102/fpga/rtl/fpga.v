@@ -163,6 +163,7 @@ module fpga #
     input  wire         btnc,
     input  wire [7:0]   sw,
     output wire [7:0]   led,
+    output wire [7:0]   pl_pmod_1,
 
     /*
      * Ethernet: SFP+
@@ -1109,6 +1110,7 @@ core_inst (
     .btnc(btnc_int),
     .sw(sw_int),
     .led(led),
+    .pl_pmod_1(pl_pmod_1),
 
     /*
      * Interrupt outputs

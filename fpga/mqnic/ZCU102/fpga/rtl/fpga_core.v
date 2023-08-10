@@ -186,6 +186,7 @@ module fpga_core #
     input  wire                                 btnc,
     input  wire [7:0]                           sw,
     output wire [7:0]                           led,
+    output wire [7:0]                           pl_pmod_1,
 
     /*
      * Interrupt outputs
@@ -652,6 +653,9 @@ endgenerate
 
 assign led[6:0] = 0;
 assign led[7] = ptp_pps_str;
+
+assign pl_pmod_1[6:0] = 0;
+assign pl_pmod_1[7] = ptp_pps_str;
 
 wire [PORT_COUNT-1:0]                         eth_tx_clk;
 wire [PORT_COUNT-1:0]                         eth_tx_rst;
