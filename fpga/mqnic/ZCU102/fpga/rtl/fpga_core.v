@@ -432,13 +432,13 @@ wire                             axil_csr_rvalid;
 wire                             axil_csr_rready;
 
 // PTP
-wire [PTP_TS_WIDTH-1:0]     ptp_ts_96;
-wire                        ptp_ts_step;
-wire                        ptp_pps;
-wire                        ptp_pps_str;
-wire [PTP_TS_WIDTH-1:0]     ptp_sync_ts_96;
-wire                        ptp_sync_ts_step;
-wire                        ptp_sync_pps;
+(* mark_debug = "true" *) wire [PTP_TS_WIDTH-1:0]     ptp_ts_96;
+(* mark_debug = "true" *) wire                        ptp_ts_step;
+(* mark_debug = "true" *) wire                        ptp_pps;
+(* mark_debug = "true" *) wire                        ptp_pps_str;
+(* mark_debug = "true" *) wire [PTP_TS_WIDTH-1:0]     ptp_sync_ts_96;
+(* mark_debug = "true" *) wire                        ptp_sync_ts_step;
+(* mark_debug = "true" *) wire                        ptp_sync_pps;
 
 wire [PTP_PEROUT_COUNT-1:0] ptp_perout_locked;
 wire [PTP_PEROUT_COUNT-1:0] ptp_perout_error;
