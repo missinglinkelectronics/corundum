@@ -10,3 +10,4 @@ CONFIG_linuxptp
 
 CONFIG_kernel-module-mqnic
 CONFIG_mqnic-tools
+CONFIG_kernel-module-mqnic-app-dma-bench
