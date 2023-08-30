@@ -3,7 +3,8 @@
 
 ifneq ($(KERNELRELEASE),)
 
-KBUILD_EXTRA_SYMBOLS=$(src)/../mqnic/Module.symvers
+KBUILD_EXTRA_SYMBOLS ?= $(MQNIC_SYMVERS)
+KBUILD_EXTRA_SYMBOLS ?= $(src)/../mqnic/Module.symvers
 
 ccflags-y += -I$(src)/../mqnic/
 
@@ -17,6 +18,10 @@ ifneq ($(KERNEL_SRC),)
 # alternatively to variable KDIR accept variable KERNEL_SRC as used in
 # PetaLinux/Yocto for example
 KDIR ?= $(KERNEL_SRC)
+endif
+
+ifneq ($(MQNIC_SYMVERS),)
+export MQNIC_SYMVERS
 endif
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
