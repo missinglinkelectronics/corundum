@@ -565,15 +565,7 @@ static void mqnic_common_remove(struct mqnic_dev *mqnic)
 	if (mqnic->app_adev) {
 		auxiliary_device_delete(&mqnic->app_adev->adev);
 		auxiliary_device_uninit(&mqnic->app_adev->adev);
-		// all AUX devices are gone, remove the resources
-		for (k=0; k < mqnic->app_adev->num_resources; k++)
-		{
-			ret = remove_resource(&(mqnic->app_adev->resources[k]));
-			if (ret < 0)
-			{
-				dev_err(mqnic->dev, "failed to remove reource.\n");
-			}
-		}
+		kfree(mqnic->app_adev);
 	}
 #endif
 
