@@ -48,9 +48,7 @@ struct resource *mqnic_auxiliary_device_get_resource (struct auxiliary_device *a
 {
 	struct mqnic_adev *mqnic_adev;
 	struct mqnic_dev *mdev;
-	struct resource *res;
 	struct resource *mqnic_res;
-	int ret = 0;
 
 	if (num != 0) {
 		dev_err(&adev->dev, "index (num) of resource not 0.\n");
