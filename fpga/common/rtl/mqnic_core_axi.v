@@ -9,6 +9,14 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
+`ifdef APP_CUSTOM_PARAMS_ENABLE
+    `include "mqnic_app_custom_params.vh"
+`endif
+
+`ifdef APP_CUSTOM_PORTS_ENABLE
+    `include "mqnic_app_custom_ports.vh"
+`endif
+
 /*
  * mqnic core logic - AXI DMA wrapper
  */
@@ -142,6 +150,11 @@ module mqnic_core_axi #
     parameter APP_STAT_ENABLE = 1,
     parameter APP_GPIO_IN_WIDTH = 32,
     parameter APP_GPIO_OUT_WIDTH = 32,
+
+    // Custom application block parameters
+    `ifdef APP_CUSTOM_PARAMS_ENABLE
+        `APP_CUSTOM_PARAMS_DECL
+    `endif
 
     // AXI interface configuration (DMA)
     parameter AXI_DATA_WIDTH = 128,
@@ -507,6 +520,13 @@ module mqnic_core_axi #
      */
     input  wire [APP_GPIO_IN_WIDTH-1:0]               app_gpio_in,
     output wire [APP_GPIO_OUT_WIDTH-1:0]              app_gpio_out,
+
+    /*
+     * Custom application block ports
+     */
+    `ifdef APP_CUSTOM_PORTS_ENABLE
+        `APP_CUSTOM_PORTS_DECL
+    `endif
 
     /*
      * JTAG
@@ -1055,6 +1075,11 @@ mqnic_core #(
     .APP_AXIS_IF_ENABLE(APP_AXIS_IF_ENABLE),
     .APP_STAT_ENABLE(APP_STAT_ENABLE),
 
+    // Custom application block parameters
+    `ifdef APP_CUSTOM_PARAMS_ENABLE
+        `APP_CUSTOM_PARAMS_MAP
+    `endif
+
     // DMA interface configuration
     .DMA_ADDR_WIDTH(DMA_ADDR_WIDTH),
     .DMA_IMM_ENABLE(DMA_IMM_ENABLE),
@@ -1432,6 +1457,13 @@ core_inst (
      */
     .app_gpio_in(app_gpio_in),
     .app_gpio_out(app_gpio_out),
+
+    /*
+     * Custom application block ports
+     */
+    `ifdef APP_CUSTOM_PORTS_ENABLE
+        `APP_CUSTOM_PORTS_MAP
+    `endif
 
     /*
      * JTAG

@@ -9,6 +9,14 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
+`ifdef APP_CUSTOM_PARAMS_ENABLE
+    `include "mqnic_app_custom_params.vh"
+`endif
+
+`ifdef APP_CUSTOM_PORTS_ENABLE
+    `include "mqnic_app_custom_ports.vh"
+`endif
+
 /*
  * mqnic core logic - Xilinx UltraScale/UltraScale+ wrapper
  */
@@ -98,6 +106,11 @@ module mqnic_core_pcie_us #
     parameter APP_STAT_ENABLE = 1,
     parameter APP_GPIO_IN_WIDTH = 32,
     parameter APP_GPIO_OUT_WIDTH = 32,
+
+    // Custom application block parameters
+    `ifdef APP_CUSTOM_PARAMS_ENABLE
+        `APP_CUSTOM_PARAMS_DECL
+    `endif
 
     // RAM configuration
     parameter DDR_CH = 1,
@@ -527,6 +540,13 @@ module mqnic_core_pcie_us #
      */
     input  wire [APP_GPIO_IN_WIDTH-1:0]                  app_gpio_in,
     output wire [APP_GPIO_OUT_WIDTH-1:0]                 app_gpio_out,
+
+    /*
+     * Custom application block ports
+     */
+    `ifdef APP_CUSTOM_PORTS_ENABLE
+        `APP_CUSTOM_PORTS_DECL
+    `endif
 
     /*
      * JTAG
@@ -978,6 +998,11 @@ mqnic_core_pcie #(
     .APP_AXIS_IF_ENABLE(APP_AXIS_IF_ENABLE),
     .APP_STAT_ENABLE(APP_STAT_ENABLE),
 
+    // Custom application block parameters
+    `ifdef APP_CUSTOM_PARAMS_ENABLE
+        `APP_CUSTOM_PARAMS_MAP
+    `endif
+
     // DMA interface configuration
     .DMA_IMM_ENABLE(DMA_IMM_ENABLE),
     .DMA_IMM_WIDTH(DMA_IMM_WIDTH),
@@ -1358,6 +1383,13 @@ core_pcie_inst (
      */
     .app_gpio_in(app_gpio_in),
     .app_gpio_out(app_gpio_out),
+
+    /*
+     * Custom application block ports
+     */
+    `ifdef APP_CUSTOM_PORTS_ENABLE
+        `APP_CUSTOM_PORTS_MAP
+    `endif
 
     /*
      * JTAG
