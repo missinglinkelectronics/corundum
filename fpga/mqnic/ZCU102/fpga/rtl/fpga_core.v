@@ -186,6 +186,7 @@ module fpga_core #
     input  wire                                 btnc,
     input  wire [7:0]                           sw,
     output wire [7:0]                           led,
+    output wire [7:0]                           pl_pmod_1,
 
     /*
      * Interrupt outputs
@@ -431,13 +432,13 @@ wire                             axil_csr_rvalid;
 wire                             axil_csr_rready;
 
 // PTP
-wire [PTP_TS_WIDTH-1:0]     ptp_ts_96;
-wire                        ptp_ts_step;
-wire                        ptp_pps;
-wire                        ptp_pps_str;
-wire [PTP_TS_WIDTH-1:0]     ptp_sync_ts_96;
-wire                        ptp_sync_ts_step;
-wire                        ptp_sync_pps;
+(* mark_debug = "true" *) wire [PTP_TS_WIDTH-1:0]     ptp_ts_96;
+(* mark_debug = "true" *) wire                        ptp_ts_step;
+(* mark_debug = "true" *) wire                        ptp_pps;
+(* mark_debug = "true" *) wire                        ptp_pps_str;
+(* mark_debug = "true" *) wire [PTP_TS_WIDTH-1:0]     ptp_sync_ts_96;
+(* mark_debug = "true" *) wire                        ptp_sync_ts_step;
+(* mark_debug = "true" *) wire                        ptp_sync_pps;
 
 wire [PTP_PEROUT_COUNT-1:0] ptp_perout_locked;
 wire [PTP_PEROUT_COUNT-1:0] ptp_perout_error;
@@ -652,6 +653,9 @@ endgenerate
 
 assign led[6:0] = 0;
 assign led[7] = ptp_pps_str;
+
+assign pl_pmod_1[6:0] = 0;
+assign pl_pmod_1[7] = ptp_pps_str;
 
 wire [PORT_COUNT-1:0]                         eth_tx_clk;
 wire [PORT_COUNT-1:0]                         eth_tx_rst;

@@ -28,6 +28,19 @@ set_property -dict {LOC AL12 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {
 set_false_path -to [get_ports {led[*]}]
 set_output_delay 0 [get_ports {led[*]}]
 
+# PL PMOD 1 J87
+set_property -dict {LOC D20 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[0]}]
+set_property -dict {LOC E20 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[1]}]
+set_property -dict {LOC D22 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[2]}]
+set_property -dict {LOC E22 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[3]}]
+set_property -dict {LOC F20 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[4]}]
+set_property -dict {LOC G20 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[5]}]
+set_property -dict {LOC J20 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[6]}]
+set_property -dict {LOC J19 IOSTANDARD LVCMOS33 SLEW SLOW DRIVE 8} [get_ports {pl_pmod_1[7]}]
+
+set_false_path -to [get_ports {pl_pmod_1[*]}]
+set_output_delay 0 [get_ports {pl_pmod_1[*]}]
+
 # Reset button
 #set_property -dict {LOC AM13 IOSTANDARD LVCMOS33} [get_ports reset]
 
